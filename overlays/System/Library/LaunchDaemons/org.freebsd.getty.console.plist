@@ -23,7 +23,7 @@
     <string>org.freebsd.getty.console</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/libexec/getty</string>
+        <string>/usr/libexec/launchd-getty-wrapper</string>
         <string>3wire</string>
         <string>ttyu0</string>
     </array>
