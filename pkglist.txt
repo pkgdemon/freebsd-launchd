@@ -12,3 +12,10 @@ libxml2
 # libs-base configure: NSLocale / NSString unicode handling.
 # libgnustep-base.so links against libicui18n.so + libicuuc.so at runtime.
 icu
+
+# Runtime dep surfaced at boot: ld-elf.so.1 fails to load
+# libgnustep-base.so.1.31 because of "Shared object libffi.so.8 not
+# found". libffi gets pulled in as a transitive of cmake/ninja at
+# build time but removed by `pkg autoremove` after the buildpkgs purge.
+# Pin it explicitly here so it stays on the ISO.
+libffi
