@@ -10,3 +10,6 @@ ninja
 gmake
 autoconf
 libtool
+# libs-base configure uses pkg-config (pkgconf on FreeBSD) to discover
+# ICU's CFLAGS/LDFLAGS via icu-i18n.pc / icu-uc.pc.
+pkgconf
