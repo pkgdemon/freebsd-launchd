@@ -80,6 +80,14 @@ if [ "$$" = "1" ]; then
     # Option D: we're PID 1. Hand off to launchd by chroot+exec. exec
     # replaces this shell with /rescue/chroot (preserving PID 1), which
     # chroots and execs /sbin/launchd (still PID 1). launchd inherits.
+    #
+    # Redirect stderr to /var/log/launchd.log in the chrooted rootfs
+    # before the chroot+exec — Apple's launchd routes through asl /
+    # unified logging and never writes to the console; we approximate
+    # by sending launchd's stderr to a log file (on the unionfs tmpfs
+    # upper; lost on reboot, fine for boot diagnostics) instead of
+    # /dev/console. Console stays clean for kernel printf only.
+    exec 2>>/sysroot/var/log/launchd.log
     exec /rescue/chroot /sysroot /sbin/launchd
 fi
 
