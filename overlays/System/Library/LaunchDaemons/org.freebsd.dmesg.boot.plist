@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  org.freebsd.dmesg.boot.plist
+
+  Saves the kernel ring buffer to /var/log/dmesg.boot at boot, so admins
+  can read the boot-time kernel log post-login (when the live ringbuf
+  has rolled over). Conventional FreeBSD parity — what rc.d/dmesg does.
+
+  One-shot: RunAtLoad=true, KeepAlive=false. Exits after the redirect
+  completes.
+
+  Includes mkdir -p of /var/log inline because launchd plist scan order
+  is alphabetical and "dmesg.boot" sorts before "varrun" (which would
+  also create /var/log). Self-sufficient is safer than relying on
+  ordering.
+
+  Absolute paths required since EnvironmentVariables=PATH isn't yet
+  honored by the vendored launchd (see memory note
+  reference_launchd_unimplemented_keys.md).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.freebsd.dmesg.boot</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>/bin/mkdir -p /var/log; /sbin/dmesg &gt; /var/log/dmesg.boot</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

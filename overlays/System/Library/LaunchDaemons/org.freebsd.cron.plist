@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  org.freebsd.cron.plist
+
+  Scheduled-task daemon. Runs system + user crontabs from /etc/crontab,
+  /etc/cron.d/, /var/cron/tabs/.
+
+  Note on supervision: FreeBSD cron self-daemonizes (fork+detach, parent
+  exits 0). With KeepAlive=true launchd would respawn the parent in a
+  loop because cron's "real" process disconnects. Pattern we use is the
+  rc.d-compatible one — RunAtLoad=true, KeepAlive=false: launchd spawns
+  cron, cron forks, launchd reaps the parent (status=0), the detached
+  child continues running. If cron crashes, launchd won't know — but
+  cron crashes are vanishingly rare. To get real supervision, cron
+  would need a -f foreground flag (which FreeBSD's cron lacks; pkg's
+  vixie-cron has -n).
+
+  -s = single-mode (don't run jobs in parallel; matches rc.d default).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.freebsd.cron</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/sbin/cron</string>
+        <string>-s</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
