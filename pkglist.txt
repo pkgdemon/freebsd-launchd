@@ -5,4 +5,6 @@
 # Every entry should name the build step (or runtime symptom) that
 # demanded it, so future readers can audit whether the demand still
 # holds.
-libxml2  # libs-base configure: GSXML/NSXMLNode/NSPropertyListSerialization XML branch
+# libs-base configure: GSXML / NSXMLNode / NSPropertyListSerialization
+# XML branch. libgnustep-base.so links against libxml2.so at runtime.
+libxml2
