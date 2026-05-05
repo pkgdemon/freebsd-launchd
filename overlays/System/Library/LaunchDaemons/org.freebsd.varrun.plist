@@ -23,7 +23,7 @@
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>mkdir -p /var/run /var/log /var/spool /var/empty && chmod 1777 /tmp && touch /var/log/messages /var/log/auth.log /var/log/maillog</string>
+        <string>mkdir -p /var/run /var/log /var/spool /var/empty &amp;&amp; chmod 1777 /tmp &amp;&amp; touch /var/log/messages /var/log/auth.log /var/log/maillog</string>
     </array>
     <key>RunAtLoad</key>
     <true/>

@@ -9,8 +9,9 @@
   near-no-op. Shipped so future overlays adding kernel-tunable knobs
   (net.inet.ip.forwarding, kern.ipc.somaxconn, etc.) take effect.
 
-  Wrapped in `[ -f ... ] && exec ...` so the plist is benign if the
-  file is missing entirely.
+  /etc/sysctl.conf ships in base.txz (comment-only by default) so
+  sysctl -f against it is a safe no-op even with no overlays. No
+  /bin/sh wrapper needed.
 -->
 <plist version="1.0">
 <dict>
@@ -18,9 +19,9 @@
     <string>org.freebsd.sysctl</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/bin/sh</string>
-        <string>-c</string>
-        <string>[ -f /etc/sysctl.conf ] && exec /sbin/sysctl -f /etc/sysctl.conf; exit 0</string>
+        <string>/sbin/sysctl</string>
+        <string>-f</string>
+        <string>/etc/sysctl.conf</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
