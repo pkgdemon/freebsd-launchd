@@ -66,12 +66,12 @@ static NSString *const kLocalLaunchDaemons = @"/Local/Library/LaunchDaemons";
 
 - (BOOL)shouldHandleInterface:(NSString *)name flags:(int)flags {
     /* Filter out interface families we don't auto-handle:
-     *   lo*       loopback
-     *   tap/tun   virtual point-to-point
-     *   gif/stf   IPv6 tunnels
-     *   wlan*     needs explicit wpa_supplicant + dhclient pair
-     *   wg*       WireGuard
-     *   epair*/bridge*/enc*/pflog*/pfsync*  pseudo / firewall
+     *     lo       (loopback)
+     *     tap, tun (virtual point-to-point)
+     *     gif, stf (IPv6 tunnels)
+     *     wlan     (needs explicit wpa_supplicant + dhclient pair)
+     *     wg       (WireGuard)
+     *     epair, bridge, enc, pflog, pfsync (pseudo / firewall)
      */
     static NSArray<NSString *> *prefixes = nil;
     static dispatch_once_t once;
