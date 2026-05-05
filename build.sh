@@ -210,9 +210,13 @@ cmake .. \
 # libs-base (Foundation)
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 cd "$REPOS_DIR/libs-base"
+# --disable-tls per plan §8.7 — launchd doesn't speak TLS, and pulling
+# in libgnutls/openssl would bloat the ISO for NSStream/NSURLConnection
+# functionality we don't use.
 ./configure \
   --with-dispatch-include=/System/Library/Headers \
-  --with-dispatch-library=/System/Library/Libraries
+  --with-dispatch-library=/System/Library/Libraries \
+  --disable-tls
 $MAKE_CMD -j"$CPUS"
 $MAKE_CMD install
 $MAKE_CMD clean
