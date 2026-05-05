@@ -1,6 +1,7 @@
 out/
 work/
 distfiles/
+repos/
 *.iso
 *.img
 *.uzip

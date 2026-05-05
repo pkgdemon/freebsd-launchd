@@ -1,0 +1,12 @@
+# One pkg per line; lines starting with # are ignored.
+# Build-only packages — installed in the chroot to compile the
+# system-domain libraries (libdispatch + GNUstep stack), then purged
+# before the slim/mkuzip pass so they don't ship in the ISO.
+#
+# Start minimal; add a package only when a build step actually demands
+# it, with a one-line commit message naming the step.
+cmake
+ninja
+gmake
+autoconf
+libtool

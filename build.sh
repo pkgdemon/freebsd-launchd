@@ -22,15 +22,43 @@ ROOT=$(cd "$(dirname "$0")" && pwd)
 WORK=$ROOT/work
 OUT=$ROOT/out
 DIST=$ROOT/distfiles
+REPOS=$ROOT/repos
 
 MIRROR="https://download.freebsd.org/ftp/releases/${ARCH}/${FREEBSD_VERSION}-RELEASE"
 
-mkdir -p "$WORK" "$OUT" "$DIST"
+mkdir -p "$WORK" "$OUT" "$DIST" "$REPOS"
 
-# Clean any prior partial build (but keep distfiles cached)
+# Clean any prior partial build (but keep distfiles + repos cached)
 rm -rf "$WORK"/* "$OUT"/*
 
 echo "==> build: FreeBSD $FREEBSD_VERSION ($ARCH), compress=$COMPRESS"
+
+#
+# 0. host-side: clone or update the system-domain upstreams into repos/.
+#    Order is significant per plan §8.2: tools-make writes the GNUstep.conf
+#    that libobjc2 reads, libobjc2 needs BlocksRuntime from libdispatch,
+#    libs-base/libs-corebase install through gnustep-make. Tracking
+#    upstream HEAD; no pinning. Chroot stays git-free — these clones live
+#    on the host and get rsynced in below.
+#
+echo "==> cloning/updating system-domain upstreams"
+UPSTREAMS="
+https://github.com/apple/swift-corelibs-libdispatch.git
+https://github.com/gnustep/tools-make.git
+https://github.com/gnustep/libobjc2.git
+https://github.com/gnustep/libs-base.git
+https://github.com/gnustep/libs-corebase.git
+"
+for repo in $UPSTREAMS; do
+    name=$(basename "$repo" .git)
+    if [ -d "$REPOS/$name/.git" ]; then
+        echo "    updating $name"
+        ( cd "$REPOS/$name" && git fetch --all --tags && git pull --ff-only )
+    else
+        echo "    cloning $name"
+        git clone "$repo" "$REPOS/$name"
+    fi
+done
 
 #
 # 1. fetch base.txz + kernel.txz
@@ -63,26 +91,133 @@ cap_mkdb "$WORK/rootfs/etc/login.conf"
 pwd_mkdb -p -d "$WORK/rootfs/etc" "$WORK/rootfs/etc/master.passwd"
 
 #
-# 3. install packages from pkglist.txt (skipped if empty/comments-only)
+# 3. chroot: runtime pkgs (pkglist.txt) + build pkgs (buildpkgs.txt) +
+#    system-domain build (libdispatch + GNUstep stack) + buildpkgs purge.
+#    Single chroot session for all of it; build pkgs go in and out before
+#    the slim pass so they don't ship in the ISO.
 #
-PKGS=$(grep -v '^[[:space:]]*#' "$ROOT/pkglist.txt" 2>/dev/null | grep -v '^[[:space:]]*$' || true)
-if [ -n "$PKGS" ]; then
-    echo "==> installing packages:"
-    echo "$PKGS" | sed 's/^/    /'
+RUNTIME_PKGS=$(grep -v '^[[:space:]]*#' "$ROOT/pkglist.txt"   2>/dev/null | grep -v '^[[:space:]]*$' || true)
+BUILD_PKGS=$(  grep -v '^[[:space:]]*#' "$ROOT/buildpkgs.txt" 2>/dev/null | grep -v '^[[:space:]]*$' || true)
+
+if [ -n "$RUNTIME_PKGS" ] || [ -n "$BUILD_PKGS" ]; then
     cp /etc/resolv.conf "$WORK/rootfs/etc/resolv.conf"
     mount -t devfs devfs "$WORK/rootfs/dev"
     cleanup_chroot() {
         umount -f "$WORK/rootfs/dev" 2>/dev/null || true
         rm -f "$WORK/rootfs/etc/resolv.conf"
+        rm -rf "$WORK/rootfs/tmp/repos"
     }
     trap cleanup_chroot EXIT INT TERM
+
     chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes IGNORE_OSVERSION=yes pkg bootstrap -f
-    # shellcheck disable=SC2086
-    chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes IGNORE_OSVERSION=yes pkg install -y $PKGS
+
+    if [ -n "$RUNTIME_PKGS" ]; then
+        echo "==> installing runtime packages:"
+        echo "$RUNTIME_PKGS" | sed 's/^/    /'
+        # shellcheck disable=SC2086
+        chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes IGNORE_OSVERSION=yes \
+            pkg install -y $RUNTIME_PKGS
+    else
+        echo "==> pkglist.txt empty; skipping runtime pkg install"
+    fi
+
+    if [ -n "$BUILD_PKGS" ]; then
+        echo "==> installing build packages:"
+        echo "$BUILD_PKGS" | sed 's/^/    /'
+        # shellcheck disable=SC2086
+        chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes IGNORE_OSVERSION=yes \
+            pkg install -y $BUILD_PKGS
+
+        # Host-cloned upstreams into chroot; chroot stays git-free.
+        echo "==> rsyncing repos/ -> chroot:/tmp/repos/"
+        mkdir -p "$WORK/rootfs/tmp/repos"
+        rsync -a --delete "$REPOS/" "$WORK/rootfs/tmp/repos/"
+
+        # §8.4 verbatim build invocations. Order matters; see §8.2.
+        echo "==> building system-domain libraries in chroot"
+        chroot "$WORK/rootfs" /bin/sh -ex <<'CHROOT_BUILD'
+MAKE_CMD=gmake
+CPUS=$(sysctl -n hw.ncpu)
+REPOS_DIR=/tmp/repos
+
+# libdispatch
+mkdir -p "$REPOS_DIR/swift-corelibs-libdispatch/Build"
+cd "$REPOS_DIR/swift-corelibs-libdispatch/Build"
+cmake .. \
+  -DCMAKE_INSTALL_PREFIX=/System/Library \
+  -DCMAKE_INSTALL_LIBDIR=Libraries \
+  -DINSTALL_DISPATCH_HEADERS_DIR=/System/Library/Headers/dispatch \
+  -DINSTALL_BLOCK_HEADERS_DIR=/System/Library/Headers \
+  -DINSTALL_OS_HEADERS_DIR=/System/Library/Headers/os \
+  -DINSTALL_PRIVATE_HEADERS=ON \
+  -DCMAKE_INSTALL_MANDIR=Documentation/man \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++
+"$MAKE_CMD" -j"$CPUS"
+"$MAKE_CMD" install
+
+# tools-make
+cd "$REPOS_DIR/tools-make"
+$MAKE_CMD distclean 2>/dev/null || true
+./configure \
+  --with-config-file=/System/Library/Preferences/GNUstep.conf \
+  --with-layout=gershwin \
+  --with-library-combo=ng-gnu-gnu \
+  --with-objc-lib-flag=" " \
+  LDFLAGS="-L/System/Library/Libraries" \
+  CPPFLAGS="-I/System/Library/Headers" \
+  libobjc_LIBS=" "
+$MAKE_CMD
+$MAKE_CMD install
+
+# libobjc2
+rm -rf "$REPOS_DIR/libobjc2/Build"
+mkdir -p "$REPOS_DIR/libobjc2/Build"
+cd "$REPOS_DIR/libobjc2/Build"
+cmake .. \
+  -DGNUSTEP_INSTALL_TYPE=SYSTEM \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DEMBEDDED_BLOCKS_RUNTIME=OFF \
+  -DBlocksRuntime_INCLUDE_DIR=/System/Library/Headers \
+  -DBlocksRuntime_LIBRARIES=/System/Library/Libraries/libBlocksRuntime.so
+"$MAKE_CMD" -j"$CPUS"
+"$MAKE_CMD" install
+
+# libs-base (Foundation)
+export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
+cd "$REPOS_DIR/libs-base"
+./configure \
+  --with-dispatch-include=/System/Library/Headers \
+  --with-dispatch-library=/System/Library/Libraries
+$MAKE_CMD -j"$CPUS"
+$MAKE_CMD install
+$MAKE_CMD clean
+
+# libs-corebase (CoreFoundation)
+cd "$REPOS_DIR/libs-corebase"
+./configure \
+  CPPFLAGS="-I/System/Library/Headers" \
+  LDFLAGS="-L/System/Library/Libraries"
+$MAKE_CMD -j"$CPUS"
+$MAKE_CMD install
+$MAKE_CMD clean
+CHROOT_BUILD
+
+        rm -rf "$WORK/rootfs/tmp/repos"
+
+        echo "==> purging build packages"
+        # shellcheck disable=SC2086
+        chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes \
+            pkg delete -y $BUILD_PKGS
+        chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes \
+            pkg autoremove -y || true
+    fi
+
     cleanup_chroot
     trap - EXIT INT TERM
-else
-    echo "==> pkglist.txt empty; skipping pkg install"
 fi
 
 #
