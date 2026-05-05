@@ -50,7 +50,7 @@ jobs:
           sync: rsync
           copyback: true
           prepare: |
-            pkg install -y bash
+            pkg install -y bash git rsync
           run: |
             set -eu
             export FREEBSD_VERSION=${{ matrix.freebsd }}
