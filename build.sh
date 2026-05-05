@@ -248,6 +248,22 @@ CHROOT_BUILD
 
         rm -rf "$WORK/rootfs/tmp/launchd"
 
+        # ---- netconfigd build (configd Phase 1) ----
+        # Same staging shape as launchd. configd/ + make-configd.sh land
+        # under /tmp/configd/ in the chroot; make-configd.sh drives
+        # configd/Makefile to compile the Phase-1 daemon and install to
+        # /usr/libexec/netconfigd.
+        echo "==> staging configd/ + make-configd.sh -> chroot:/tmp/configd/"
+        mkdir -p "$WORK/rootfs/tmp/configd"
+        rsync -a --delete "$ROOT/configd/" "$WORK/rootfs/tmp/configd/configd/"
+        cp "$ROOT/make-configd.sh" "$WORK/rootfs/tmp/configd/make-configd.sh"
+        chmod +x "$WORK/rootfs/tmp/configd/make-configd.sh"
+
+        echo "==> building + installing netconfigd in chroot"
+        chroot "$WORK/rootfs" /tmp/configd/make-configd.sh
+
+        rm -rf "$WORK/rootfs/tmp/configd"
+
         # ---- ldconfig hint for /System/Library/Libraries ----
         # FreeBSD's /etc/rc.d/ldconfig at boot reads $ldconfig_local_dirs
         # (default /usr/local/libdata/ldconfig) and adds each listed

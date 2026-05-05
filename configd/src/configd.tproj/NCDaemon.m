@@ -1,0 +1,145 @@
+/*
+ * NCDaemon.m — netconfigd top-level coordinator (Phase 1 minimal).
+ *
+ * Mirrors the rc.conf "auto network" preset:
+ *   network_interfaces="auto"          -> enumerate via getifaddrs(3)
+ *   ifconfig_DEFAULT="DHCP"            -> default to dhclient
+ *   synchronous_dhclient="NO" / -b     -> dhclient -b (background)
+ *   dhclient_flags="-n"                -> preserve existing lease
+ *   ipv6_activate_all_interfaces="YES" -> ifconfig $iface inet6 accept_rtadv
+ *   rtsold_enable="YES"                -> rtsold -a
+ *
+ * Per-interface user overrides (Phase 2+): when /Local/Library/
+ * LaunchDaemons/org.freebsd.netif.<iface>.plist or org.freebsd.dhclient.
+ * <iface>.plist exists, defer the iface to that plist and skip here.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ * Copyright (c) 2026 freebsd-launchd contributors.
+ */
+
+#import "NCDaemon.h"
+
+#import <ifaddrs.h>
+#import <net/if.h>
+#import <syslog.h>
+#import <unistd.h>
+
+static NSString *const kLocalLaunchDaemons = @"/Local/Library/LaunchDaemons";
+
+@implementation NCDaemon
+
+- (void)start {
+    NSLog(@"netconfigd: starting (pid=%d)", getpid());
+    [self bringUpInterfaces];
+    [self startRtsold];
+    NSLog(@"netconfigd: ready");
+}
+
+- (void)bringUpInterfaces {
+    struct ifaddrs *ifaddr = NULL;
+    if (getifaddrs(&ifaddr) != 0) {
+        NSLog(@"netconfigd: getifaddrs failed: %s", strerror(errno));
+        return;
+    }
+
+    /* getifaddrs returns one entry per (iface, address-family); dedup. */
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
+    for (struct ifaddrs *ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_name == NULL) continue;
+        NSString *ifname = [NSString stringWithUTF8String:ifa->ifa_name];
+        if ([seen containsObject:ifname]) continue;
+        [seen addObject:ifname];
+
+        if (![self shouldHandleInterface:ifname flags:ifa->ifa_flags]) {
+            continue;
+        }
+
+        if ([self interfaceHasUserOverride:ifname]) {
+            NSLog(@"netconfigd: %@ has user override in /Local/Library/LaunchDaemons/, skipping", ifname);
+            continue;
+        }
+
+        [self bringUpInterface:ifname];
+    }
+    freeifaddrs(ifaddr);
+}
+
+- (BOOL)shouldHandleInterface:(NSString *)name flags:(int)flags {
+    /* Filter out interface families we don't auto-handle:
+     *   lo*       loopback
+     *   tap/tun   virtual point-to-point
+     *   gif/stf   IPv6 tunnels
+     *   wlan*     needs explicit wpa_supplicant + dhclient pair
+     *   wg*       WireGuard
+     *   epair*/bridge*/enc*/pflog*/pfsync*  pseudo / firewall
+     */
+    static NSArray<NSString *> *prefixes = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        prefixes = @[ @"lo", @"tap", @"tun", @"gif", @"stf",
+                      @"wlan", @"wg", @"epair", @"bridge",
+                      @"enc", @"pflog", @"pfsync" ];
+    });
+    for (NSString *p in prefixes) {
+        if ([name hasPrefix:p]) return NO;
+    }
+    return YES;
+}
+
+- (BOOL)interfaceHasUserOverride:(NSString *)ifname {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *netifPlist = [NSString stringWithFormat:@"%@/org.freebsd.netif.%@.plist",
+                            kLocalLaunchDaemons, ifname];
+    NSString *dhclientPlist = [NSString stringWithFormat:@"%@/org.freebsd.dhclient.%@.plist",
+                               kLocalLaunchDaemons, ifname];
+    return [fm fileExistsAtPath:netifPlist] || [fm fileExistsAtPath:dhclientPlist];
+}
+
+- (void)bringUpInterface:(NSString *)ifname {
+    NSLog(@"netconfigd: bringing up %@", ifname);
+
+    /* ifconfig <iface> up */
+    [self runTool:@"/sbin/ifconfig"
+             args:@[ifname, @"up"]
+             wait:YES];
+
+    /* ifconfig <iface> inet6 accept_rtadv auto_linklocal */
+    [self runTool:@"/sbin/ifconfig"
+             args:@[ifname, @"inet6", @"accept_rtadv", @"auto_linklocal"]
+             wait:YES];
+
+    /* dhclient -b -n <iface>: -b = background, -n = preserve existing lease */
+    [self runTool:@"/sbin/dhclient"
+             args:@[@"-b", @"-n", ifname]
+             wait:NO];
+}
+
+- (void)startRtsold {
+    NSLog(@"netconfigd: starting rtsold -a (IPv6 RA solicitation)");
+    [self runTool:@"/usr/sbin/rtsold"
+             args:@[@"-a"]
+             wait:NO];
+}
+
+- (void)runTool:(NSString *)path args:(NSArray<NSString *> *)args wait:(BOOL)wait {
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = path;
+    task.arguments = args;
+    @try {
+        [task launch];
+    } @catch (NSException *exc) {
+        NSLog(@"netconfigd: failed to launch %@ %@: %@",
+              path, [args componentsJoinedByString:@" "], exc.reason);
+        return;
+    }
+    if (wait) {
+        [task waitUntilExit];
+        if (task.terminationStatus != 0) {
+            NSLog(@"netconfigd: %@ %@ exited %d",
+                  path, [args componentsJoinedByString:@" "],
+                  task.terminationStatus);
+        }
+    }
+}
+
+@end
