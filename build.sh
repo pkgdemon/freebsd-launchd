@@ -184,6 +184,14 @@ $MAKE_CMD distclean 2>/dev/null || true
 $MAKE_CMD
 $MAKE_CMD install
 
+# Source the GNUstep environment now that tools-make has installed
+# /System/Library/Makefiles/GNUstep.sh. Sets GNUSTEP_HEADERS,
+# GNUSTEP_LIBRARY, GNUSTEP_MAKEFILES — required by libobjc2's cmake
+# (else it installs to /usr/local/lib + /objc/), and required by
+# libs-base/libs-corebase configure (AC_CONFIG_AUX_DIR uses
+# GNUSTEP_MAKEFILES).
+. /System/Library/Makefiles/GNUstep.sh
+
 # libobjc2
 rm -rf "$REPOS_DIR/libobjc2/Build"
 mkdir -p "$REPOS_DIR/libobjc2/Build"
@@ -200,11 +208,6 @@ cmake .. \
 "$MAKE_CMD" install
 
 # libs-base (Foundation)
-# libs-base configure.ac uses AC_CONFIG_AUX_DIR([$GNUSTEP_MAKEFILES])
-# — without that env var (or gnustep-config in PATH) the aux-dir is
-# empty and configure dies with "cannot find required auxiliary files:".
-# tools-make installed GNUstep.sh; source it now.
-. /System/Library/Makefiles/GNUstep.sh
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 cd "$REPOS_DIR/libs-base"
 ./configure \
