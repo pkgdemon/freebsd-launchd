@@ -68,21 +68,32 @@ eval spawn qemu-system-x86_64 \
     -display none -serial stdio \
     -no-reboot
 
-# Single test: wait for the getty "login:" prompt on the serial console.
-# This is the strongest boot-success marker FreeBSD emits -- by the time
-# getty prints "login:", every prior stage has succeeded: loader, kernel,
-# cd9660 mount, init.sh, gunion overlay, init_chroot pivot, all of /etc/rc,
-# all rc.d services, and getty has come up and is accepting users.
-#
-# (Earlier we tried "Starting local daemons:" but that banner only prints
-# if /etc/rc.local exists; we removed rc.local for a clean live-system
-# experience, so the banner is gone too.)
+# Stage 1: wait for the getty "login:" prompt. By the time this fires,
+# the entire pipeline has worked: loader -> kernel -> shebang exec of
+# /init.sh as PID 1 -> unionfs pivot -> exec /sbin/launchd -> launchd
+# loads org.freebsd.getty.console.plist -> getty spawns and prints the
+# prompt. Strongest single-marker proof the launchd-as-PID-1 path works.
 expect {
     timeout {
         puts "\nFAIL: 'login:' prompt not seen within 8 minutes"
         exit 1
     }
     "login:" { puts "\nOK: boot reached the login prompt" }
+}
+
+# Stage 2: send "root" and confirm login(1) actually responds. Either
+# "Password:" (login asked, so login binary is alive — proves the post-
+# getty userland is intact) or a shell prompt (passwordless root login
+# succeeded — even better) is a pass. Silence is failure: launchd
+# spawned getty but the rest of userland is broken.
+send "root\r"
+expect {
+    timeout {
+        puts "\nFAIL: login(1) did not respond after sending 'root'"
+        exit 1
+    }
+    "Password:" { puts "OK: login(1) accepted username, requesting password" }
+    -re {[#%$] $} { puts "OK: passwordless root login succeeded; got shell prompt" }
 }
 
 close
