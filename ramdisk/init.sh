@@ -21,23 +21,37 @@
 # only). Writable upper is tmpfs, page-allocated on demand, no fixed
 # size — apparent free space scales with host RAM.
 
-set -eu
+# Phase 3d / Option D: when we run as PID 1 (kernel exec'd us via the
+# shebang), the kernel hands us fds 0/1/2 closed and /dev/console isn't
+# accessible until devfs is mounted. Set both up before anything else
+# so any later failure (or `set -e` trip) produces visible output on
+# the serial console. Use absolute paths because PATH is not yet set.
+/rescue/mount -t devfs devfs /dev 2>/dev/null || true
+if [ -c /dev/console ]; then
+    exec </dev/console >/dev/console 2>&1
+fi
+
 PATH=/rescue
 export PATH
 
-# Phase 3d debug — print PID + mode so the CI boot log shows which
-# branch fired. Remove these once Option D is empirically settled.
-echo ">>> /init.sh: starting (pid=$$, mode=$([ "$$" = "1" ] && echo PID1 || echo CHILD))"
+# Phase 3d debug — print PID so the CI boot log confirms which branch
+# fired. Remove once Option D is green.
+if [ "$$" = "1" ]; then
+    echo ">>> /init.sh: PID1 mode (kernel exec'd us via shebang)"
+else
+    echo ">>> /init.sh: CHILD mode (running under /rescue/init via init_script)"
+fi
 
-# Phase 3d debug — leave stdout/stderr connected to console so CI's
-# boot.log captures every step. Re-silence once Option D is green.
-# (Original line: exec 1>/dev/null 2>&1)
+# Now safe to enable strict mode — stdout is connected for diagnostics.
+set -eu
 
+echo ">>> /init.sh: kldload geom_uzip + unionfs"
 # Defensive module loads (also requested in /boot/loader.conf, but be safe
 # in case someone built a kernel without the loader.conf entries).
 kldload geom_uzip 2>/dev/null || true
 kldload unionfs 2>/dev/null || true
 
+echo ">>> /init.sh: mdconfig vnode-mount /rootfs.uzip"
 # Vnode-mount the compressed rootfs from the cd9660. /rootfs.uzip is at
 # the root of the cd9660 (placed there by build.sh). geom_uzip auto-tastes
 # /dev/md0 and produces /dev/md0.uzip.
@@ -54,6 +68,7 @@ while [ ! -e /dev/md0.uzip ]; do
     fi
 done
 
+echo ">>> /init.sh: mounting unionfs (lower=ufs uzip, upper=tmpfs)"
 # Mount the read-only lower at /sysroot (the merge target). /sysroot
 # exists as an empty directory on the cd9660 — we can't mkdir it here
 # because cd9660 is read-only at runtime.
