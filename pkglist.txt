@@ -1,3 +1,8 @@
 # One pkg per line; lines starting with # are ignored.
-# Empty for the smallest possible image — base + kernel only.
-# Add packages here once base boots cleanly.
+# Runtime packages — installed in the chroot and shipped in the ISO.
+# Distinct from buildpkgs.txt, which is purged before slim.
+#
+# Every entry should name the build step (or runtime symptom) that
+# demanded it, so future readers can audit whether the demand still
+# holds.
+libxml2  # libs-base configure: GSXML/NSXMLNode/NSPropertyListSerialization XML branch
