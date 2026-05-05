@@ -46,6 +46,7 @@ UPSTREAMS="
 https://github.com/apple/swift-corelibs-libdispatch.git
 https://github.com/gnustep/tools-make.git
 https://github.com/gnustep/libobjc2.git
+https://github.com/Tessil/robin-map.git
 https://github.com/gnustep/libs-base.git
 https://github.com/gnustep/libs-corebase.git
 "
@@ -132,6 +133,18 @@ if [ -n "$RUNTIME_PKGS" ] || [ -n "$BUILD_PKGS" ]; then
         echo "==> rsyncing repos/ -> chroot:/tmp/repos/"
         mkdir -p "$WORK/rootfs/tmp/repos"
         rsync -a --delete "$REPOS/" "$WORK/rootfs/tmp/repos/"
+
+        # libobjc2's CMakeLists FetchContent_Declare(robinmap) calls git
+        # at configure-time — would fail in our git-free chroot. Rewrite
+        # the Declare to point SOURCE_DIR at the sibling robin-map clone
+        # we just rsynced. Patches the chroot copy only; the host clone
+        # stays clean so future git pulls keep working. Idempotent (the
+        # source pattern disappears after first run).
+        echo "==> patching libobjc2 FetchContent(robinmap) -> SOURCE_DIR"
+        sed -i '' \
+            -e 's|GIT_REPOSITORY https://github.com/Tessil/robin-map/|SOURCE_DIR /tmp/repos/robin-map)|' \
+            -e '/GIT_TAG[[:space:]]*v1\.4\.0)/d' \
+            "$WORK/rootfs/tmp/repos/libobjc2/CMakeLists.txt"
 
         # §8.4 verbatim build invocations. Order matters; see §8.2.
         echo "==> building system-domain libraries in chroot"
