@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  org.freebsd.syslogd.plist
+
+  System log daemon. Drains /dev/klog (kernel ring buffer) and the
+  Unix socket /var/run/log into /var/log/messages and the other
+  facility-specific log files.
+
+  Flags:
+    -ss    secure mode (no UDP listener, no remote logging) — typical
+           live-ISO posture. Drop one -s for an installed system that
+           wants remote syslog reception.
+
+  KeepAlive=true: launchd respawns syslogd if it crashes. The daemon
+  is foreground (FreeBSD's syslogd doesn't daemonize on its own under
+  -F; the default forks. We use the default fork model and rely on
+  launchd's getppid==1 detection — alternative: pass -F to keep
+  syslogd in the foreground for cleaner supervision).
+
+  Future: replace with socket-activated launching (Sockets= key on
+  /var/run/log) per launchd-plan §11.1. Keeping it RunAtLoad for now
+  so it's up before configd lands and starts emitting state changes.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.freebsd.syslogd</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/sbin/syslogd</string>
+        <string>-F</string>
+        <string>-ss</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>

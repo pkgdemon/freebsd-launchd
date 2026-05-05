@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  org.freebsd.sysctl.plist
+
+  Applies /etc/sysctl.conf at boot. Replaces conventional rc.d/sysctl.
+
+  On a default live ISO /etc/sysctl.conf is comment-only, so this is a
+  near-no-op. Shipped so future overlays adding kernel-tunable knobs
+  (net.inet.ip.forwarding, kern.ipc.somaxconn, etc.) take effect.
+
+  Wrapped in `[ -f ... ] && exec ...` so the plist is benign if the
+  file is missing entirely.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.freebsd.sysctl</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>[ -f /etc/sysctl.conf ] && exec /sbin/sysctl -f /etc/sysctl.conf; exit 0</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

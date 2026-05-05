@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  org.freebsd.varrun.plist
+
+  Defensive one-shot: creates /var/run, /var/log, ensures /tmp has the
+  sticky bit, touches /var/log/messages so syslogd has somewhere to
+  write. Replaces the conventional rc.d/var + rc.d/cleanvar pair.
+
+  On our live ISO, /var/* exists in the unionfs lower (from base.txz),
+  so this is mostly a no-op. Keeping the plist explicit so an
+  alternative boot configuration (smaller rootfs, different overlay)
+  doesn't silently drop these prerequisites.
+
+  RunAtLoad=true, KeepAlive=false, LaunchOnlyOnce-style: fires once
+  early at boot and is done.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.freebsd.varrun</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>mkdir -p /var/run /var/log /var/spool /var/empty && chmod 1777 /tmp && touch /var/log/messages /var/log/auth.log /var/log/maillog</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>
