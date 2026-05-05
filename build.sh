@@ -233,6 +233,35 @@ CHROOT_BUILD
 
         rm -rf "$WORK/rootfs/tmp/repos"
 
+        # ---- launchd build (phase 3b) ----
+        # Stage src/ + make-launchd.sh together at /tmp/launchd in the
+        # chroot. make-launchd.sh expects src/ as a sibling so a clone
+        # of the repo can run it standalone — same layout works here.
+        echo "==> staging src/ + make-launchd.sh -> chroot:/tmp/launchd/"
+        mkdir -p "$WORK/rootfs/tmp/launchd"
+        rsync -a --delete "$ROOT/src/" "$WORK/rootfs/tmp/launchd/src/"
+        cp "$ROOT/make-launchd.sh" "$WORK/rootfs/tmp/launchd/make-launchd.sh"
+        chmod +x "$WORK/rootfs/tmp/launchd/make-launchd.sh"
+
+        echo "==> building + installing launchd in chroot"
+        chroot "$WORK/rootfs" /tmp/launchd/make-launchd.sh
+
+        rm -rf "$WORK/rootfs/tmp/launchd"
+
+        # ---- ldconfig hint for /System/Library/Libraries ----
+        # FreeBSD's /etc/rc.d/ldconfig at boot reads $ldconfig_local_dirs
+        # (default /usr/local/libdata/ldconfig) and adds each listed
+        # directory to the runtime linker hints. NOT /etc/ld-elf.so.conf.d
+        # — that's a Linux glibc convention FreeBSD does not honor. The
+        # `ldconfig -m` here primes the hints DB at build time so the
+        # ISO boots with /System/Library/Libraries/* immediately
+        # discoverable.
+        echo "==> writing ldconfig hint for /System/Library/Libraries"
+        mkdir -p "$WORK/rootfs/usr/local/libdata/ldconfig"
+        echo "/System/Library/Libraries" \
+            > "$WORK/rootfs/usr/local/libdata/ldconfig/freebsd-launchd"
+        chroot "$WORK/rootfs" ldconfig -m /usr/local/lib /System/Library/Libraries
+
         echo "==> purging build packages"
         # shellcheck disable=SC2086
         chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes \
