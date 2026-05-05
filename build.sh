@@ -200,6 +200,11 @@ cmake .. \
 "$MAKE_CMD" install
 
 # libs-base (Foundation)
+# libs-base configure.ac uses AC_CONFIG_AUX_DIR([$GNUSTEP_MAKEFILES])
+# — without that env var (or gnustep-config in PATH) the aux-dir is
+# empty and configure dies with "cannot find required auxiliary files:".
+# tools-make installed GNUstep.sh; source it now.
+. /System/Library/Makefiles/GNUstep.sh
 export GNUSTEP_INSTALLATION_DOMAIN="SYSTEM"
 cd "$REPOS_DIR/libs-base"
 ./configure \
