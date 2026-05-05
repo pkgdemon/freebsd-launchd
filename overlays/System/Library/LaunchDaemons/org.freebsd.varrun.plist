@@ -19,21 +19,19 @@
 <dict>
     <key>Label</key>
     <string>org.freebsd.varrun</string>
+    <!-- PID 1 is exec'd by the kernel with no PATH; launchd inherits
+         the empty environment and hands it (via posix_spawn(..., environ))
+         to its children. The vendored launchd does not yet parse
+         EnvironmentVariables from the plist (see src/src/core.m:391;
+         it passes the inherited `environ` directly). So we use absolute
+         paths here. Future: implement EnvironmentVariables parsing in
+         core.m and switch this back to bare command names. -->
     <key>ProgramArguments</key>
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>mkdir -p /var/run /var/log /var/spool /var/empty &amp;&amp; chmod 1777 /tmp &amp;&amp; touch /var/log/messages /var/log/auth.log /var/log/maillog</string>
+        <string>/bin/mkdir -p /var/run /var/log /var/spool /var/empty &amp;&amp; /bin/chmod 1777 /tmp &amp;&amp; /usr/bin/touch /var/log/messages /var/log/auth.log /var/log/maillog</string>
     </array>
-    <!-- PID 1 is exec'd by the kernel with no PATH; launchd inherits the
-         empty environment and its children (this /bin/sh) see no PATH
-         either. Without an explicit PATH, mkdir/chmod/touch lookups fail
-         and the shell exits 127. Set a reasonable default. -->
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/sbin:/bin:/usr/sbin:/usr/bin</string>
-    </dict>
     <key>RunAtLoad</key>
     <true/>
     <key>KeepAlive</key>
