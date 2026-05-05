@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Deliberately malformed: missing closing tags. launchd must reject. -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xnustep.launchd.test.bad-xml

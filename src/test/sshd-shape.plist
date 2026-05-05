@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  sshd-shape.plist — same key shape as the real
+  /System/Library/LaunchDaemons/com.openssh.sshd.plist (Label, Program,
+  ProgramArguments, RunAtLoad, StandardErrorPath), but the Program is
+  /bin/true so the test exits cleanly.
+
+  Validates that launchd can parse a plist with the exact key set the
+  real sshd plist uses, without spinning up an actual long-running
+  sshd that the test runner would have to bound with timeout.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xnustep.launchd.test.sshd-shape</string>
+    <key>Program</key>
+    <string>/System/Library/Tools/true</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>true</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StandardErrorPath</key>
+    <string>/tmp/sshd-shape-test.log</string>
+</dict>
+</plist>

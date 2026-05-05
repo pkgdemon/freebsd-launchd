@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  keepalive.plist — crash-restart test for Phase 2 increment 3.
+
+  Spawns /bin/sh that touches a file then exits 0. With KeepAlive=true
+  set and $LAUNCHD_THROTTLE_INTERVAL=1 in the test harness, launchd
+  should respawn the process within ~1s of each exit. The test counts
+  the touched-file's mtime ticks across a short window to confirm
+  multiple respawns happened.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xnustep.launchd.test.keepalive</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>printf '%s\n' "$(date +%s)" >> /tmp/launchd-keepalive.log; exit 0</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  hello.plist — smoke test for launchd's plist-load + spawn + reap path.
+
+  Used in CI: `launchd -f -p hello.plist` should load this plist,
+  spawn /bin/true, SIGCHLD-reap it, and exit 0. Any non-zero exit
+  means plist parsing, spawn, or reap regressed.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xnustep.launchd.test.hello</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/System/Library/Tools/true</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

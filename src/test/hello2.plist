@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  hello2.plist — second-job fixture for multi-job table tests
+  (Phase 2 increment 3). Distinct label so it can coexist with
+  hello.plist in the launchd job table.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xnustep.launchd.test.hello2</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/System/Library/Tools/true</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

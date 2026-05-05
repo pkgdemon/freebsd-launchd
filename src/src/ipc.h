@@ -1,47 +1,75 @@
 /*
- * Copyright (c) 2005 Apple Computer, Inc. All rights reserved.
+ * ipc.h — AF_UNIX framed message protocol between launchd and launchctl.
  *
- * @APPLE_APACHE_LICENSE_HEADER_START@
- * 
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- * 
- *     http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * 
- * @APPLE_APACHE_LICENSE_HEADER_END@
+ * Phase 2 increment 2. Custom binary protocol (NOT Apple's launch_data_t
+ * wire format). Reasons: ~200 LOC vs ~800 of surgical edits to Apple's
+ * liblaunch.c. Tradeoff: our launchctl can't talk to Apple's launchd or
+ * vice versa, which we don't need.
+ *
+ * Wire format on the AF_UNIX SOCK_STREAM socket:
+ *
+ *   +----------------------------+
+ *   | struct ipc_msg_hdr (16 B)  |
+ *   |   uint32_t magic           |  IPC_MAGIC
+ *   |   uint32_t version         |  IPC_VERSION
+ *   |   uint32_t cmd             |  enum ipc_cmd
+ *   |   uint32_t payload_len     |  bytes following the header
+ *   +----------------------------+
+ *   | payload (payload_len bytes)|  cmd-specific
+ *   +----------------------------+
+ *
+ * Replies use the same header with cmd=IPC_CMD_REPLY and payload =
+ * NUL-terminated UTF-8 status text (errno + human-readable message).
  */
 
-#ifndef __LAUNCHD_IPC_H__
-#define __LAUNCHD_IPC_H__
+#ifndef LAUNCHD_IPC_H
+#define LAUNCHD_IPC_H
 
-#include <sys/queue.h>
-#include "runtime.h"
-#include "core.h"
-#include "launch_priv.h"
-#include "launch_internal.h"
+#include <stdint.h>
+#include <stddef.h>
 
-struct conncb {
-	kq_callback kqconn_callback;
-	LIST_ENTRY(conncb) sle;
-	launch_t conn;
-	job_t j;
+#define IPC_MAGIC       0x584E5354u  /* "XNST" */
+#define IPC_VERSION     1u
+#define IPC_MAX_PAYLOAD (16u * 1024u * 1024u) /* 16 MB sanity cap */
+
+enum ipc_cmd {
+    IPC_CMD_REPLY      = 0,   /* server -> client: payload = status text */
+    IPC_CMD_LOAD       = 1,   /* client -> server: payload = abs plist path */
+    IPC_CMD_UNLOAD     = 2,   /* client -> server: payload = job label */
+    IPC_CMD_LIST       = 3,   /* client -> server: no payload */
+    IPC_CMD_START      = 4,   /* client -> server: payload = job label */
+    IPC_CMD_STOP       = 5,   /* client -> server: payload = job label */
+    IPC_CMD_SHUTDOWN   = 6,   /* client -> server: no payload */
 };
 
-extern char *sockpath;
+struct ipc_msg_hdr {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t cmd;
+    uint32_t payload_len;
+};
 
-void ipc_open(int fd, job_t j);
-void ipc_close_all_with_job(job_t j);
-void ipc_close(struct conncb *c);
-void ipc_callback(void *, struct kevent *);
-void ipc_revoke_fds(launch_data_t o);
-void ipc_close_fds(launch_data_t o);
-void ipc_server_init(void);
+/* Default socket path. Override with LAUNCHD_SOCKET env var.
+ * Per-pid suffix when not running as PID 1 so multiple test daemons
+ * don't collide. */
+#define IPC_DEFAULT_PID1_DIR    "/var/run/launchd"
+#define IPC_DEFAULT_PID1_SOCK   IPC_DEFAULT_PID1_DIR "/sock"
 
-#endif /* __LAUNCHD_IPC_H__ */
+/* Server side (called from launchd). Returns 0 on success, -1 on error.
+ * Sets up an AF_UNIX listener on the given path (or default if NULL),
+ * registers a libdispatch READ source on it, and stores the path in
+ * the LAUNCHD_SOCKET env var so launched children can find it. */
+int  ipc_server_init(const char *sockpath_or_null);
+void ipc_server_close(void);
+
+/* Returns the path the server is listening on (post-init). */
+const char *ipc_server_path(void);
+
+/* Helpers for client + server: framed message I/O.
+ *  ipc_send: writes header + payload, returns 0 on success, -1 on error.
+ *  ipc_recv: reads header + payload, allocates *payload_out (caller frees),
+ *            returns 0 on success, -1 on error, -2 on clean EOF. */
+int  ipc_send(int fd, uint32_t cmd, const void *payload, size_t len);
+int  ipc_recv(int fd, struct ipc_msg_hdr *hdr_out, void **payload_out);
+
+#endif /* LAUNCHD_IPC_H */
