@@ -25,10 +25,13 @@ set -eu
 PATH=/rescue
 export PATH
 
-# Silence diagnostic output. End users shouldn't see init.sh's internals
-# during boot. If something fails, set -e bubbles up and init drops to
-# single-user where the user can investigate.
-exec 1>/dev/null 2>&1
+# Phase 3d debug — print PID + mode so the CI boot log shows which
+# branch fired. Remove these once Option D is empirically settled.
+echo ">>> /init.sh: starting (pid=$$, mode=$([ "$$" = "1" ] && echo PID1 || echo CHILD))"
+
+# Phase 3d debug — leave stdout/stderr connected to console so CI's
+# boot.log captures every step. Re-silence once Option D is green.
+# (Original line: exec 1>/dev/null 2>&1)
 
 # Defensive module loads (also requested in /boot/loader.conf, but be safe
 # in case someone built a kernel without the loader.conf entries).
@@ -75,8 +78,10 @@ if [ "$$" = "1" ]; then
     # Option D: we're PID 1. Hand off to launchd by chroot+exec. exec
     # replaces this shell with /rescue/chroot (preserving PID 1), which
     # chroots and execs /sbin/launchd (still PID 1). launchd inherits.
+    echo ">>> /init.sh: handing PID 1 to /sbin/launchd via /rescue/chroot"
     exec /rescue/chroot /sysroot /sbin/launchd
 fi
+echo ">>> /init.sh: child mode, setting init_chroot kenv and exiting"
 
 # Fallback path: we're a child of /rescue/init via init_script. Set
 # kenv for /rescue/init's chroot, then exit. init.c reads init_chroot
