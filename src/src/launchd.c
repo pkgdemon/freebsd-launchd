@@ -38,7 +38,7 @@
 
 static const char *default_scan_dirs[] = {
     "/System/Library/LaunchDaemons",
-    "/Library/LaunchDaemons",
+    "/Local/Library/LaunchDaemons",
     NULL,
 };
 
@@ -58,7 +58,7 @@ usage(const char *argv0)
         "  -h             show this help\n"
         "\n"
         "With no flags, runs as PID 1: scans /System/Library/LaunchDaemons\n"
-        "and /Library/LaunchDaemons, opens the IPC socket, never exits.\n",
+        "and /Local/Library/LaunchDaemons, opens the IPC socket, never exits.\n",
         argv0, argv0, argv0, argv0);
 }
 
