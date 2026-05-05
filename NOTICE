@@ -1,0 +1,40 @@
+freebsd-launchd
+Copyright 2026 Joseph Maloney and contributors
+
+Licensed under BSD-2-Clause (see LICENSE).
+
+This product includes software developed by:
+
+  - Apple Inc.
+    (launchd, 2005-2012, Apache License 2.0)
+    https://github.com/apple/launchd
+    Modified by freebsd-launchd contributors; see git log.
+    Modified files retain the @APPLE_APACHE_LICENSE_HEADER_START@
+    block at the top of each file. Per Apache 2.0 §4(b), modified files
+    carry a "Modified by..." note immediately below the Apple header.
+
+  - Apple Inc. and the Swift project authors
+    (swift-corelibs-libdispatch, Apache License 2.0
+     with Runtime Library Exception)
+    https://github.com/apple/swift-corelibs-libdispatch
+    Linked at runtime; not included in this source tree.
+    Built from upstream during the livecd staging build (see build.sh).
+
+  - The GNUstep Project
+    (libs-base, libs-corebase, LGPL 2.1+ / LGPL 3 with linking exception)
+    https://github.com/gnustep/libs-base
+    https://github.com/gnustep/libs-corebase
+    Linked at runtime; not included in this source tree.
+    Per LGPL §6, the corresponding source for the version shipped in
+    any released ISO is identifiable from the upstream commit the build
+    fetched (see release notes).
+
+  - The libobjc2 contributors
+    (libobjc2, MIT License)
+    https://github.com/gnustep/libobjc2
+    Linked at runtime; not included in this source tree.
+
+  - The tools-make contributors
+    (gnustep-make, GPL 3 with linking exception)
+    https://github.com/gnustep/tools-make
+    Build-time only; not linked into runtime binaries.

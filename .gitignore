@@ -1,0 +1,11 @@
+out/
+work/
+distfiles/
+*.iso
+*.img
+*.uzip
+*.ufs
+*.gz
+tests/boot.log
+tests/boot.exp
+.DS_Store
