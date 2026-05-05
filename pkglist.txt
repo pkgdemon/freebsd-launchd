@@ -8,3 +8,7 @@
 # libs-base configure: GSXML / NSXMLNode / NSPropertyListSerialization
 # XML branch. libgnustep-base.so links against libxml2.so at runtime.
 libxml2
+
+# libs-base configure: NSLocale / NSString unicode handling.
+# libgnustep-base.so links against libicui18n.so + libicuuc.so at runtime.
+icu
