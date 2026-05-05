@@ -1,16 +1,21 @@
 #!/rescue/sh
-# /init.sh — runs as a child of /sbin/init via init_script kenv.
+# /init.sh — boot pivot script. Runs in one of two modes:
 #
-# This script lives at the root of the cd9660 ISO. The kernel mounts
-# cd9660 as /, init runs from /sbin/init (FreeBSD's real init binary from
-# base.txz), reads init_script=/init.sh kenv, forks, and execs us.
+# (a) PID 1 mode (Option D, plan §9.2 revised):
+#     loader.conf init_path=/init.sh causes the kernel to exec us
+#     directly via the shebang above. /rescue/sh becomes PID 1 with
+#     this script as argv[1]. After the unionfs pivot we hand PID 1
+#     to launchd via `exec /rescue/chroot /sysroot /sbin/launchd`,
+#     preserving PID across the exec chain.
 #
-# We set up an in-kernel unionfs overlay (read-only uzip lower + tmpfs
-# writable upper) at /sysroot, then write init_chroot=/sysroot kenv and
-# exit. After we exit, init proceeds to read init_chroot at init.c:333
-# and chroots into /sysroot before continuing normal multi-user boot.
-# cd9660 stays mounted as the kernel's actual root; userland sees
-# /sysroot as /.
+# (b) Fallback mode (kernel rejected /init.sh, tried /rescue/init next):
+#     /rescue/init runs as PID 1 and reads init_script=/init.sh kenv
+#     to invoke us as its child. After the unionfs pivot we set
+#     init_chroot=/sysroot kenv and exit; /rescue/init does the chroot
+#     and continues normal multi-user boot (FreeBSD init's runcom +
+#     /etc/rc, no launchd).
+#
+# Detection: $$ == 1 iff PID 1 mode.
 #
 # Memory cost: ~50 MB at idle (decompressed pages of accessed uzip data
 # only). Writable upper is tmpfs, page-allocated on demand, no fixed
@@ -65,9 +70,18 @@ mount -t unionfs /upper /sysroot
 # devfs in the chroot
 mount -t devfs devfs /sysroot/dev
 
-# Tell init to chroot into /sysroot after we exit. init.c reads
-# init_chroot kenv at line 333, which is AFTER the script runs
-# (line 326-331), so a kenv set here will be honored.
+# Branch on whether we're PID 1 or init's child.
+if [ "$$" = "1" ]; then
+    # Option D: we're PID 1. Hand off to launchd by chroot+exec. exec
+    # replaces this shell with /rescue/chroot (preserving PID 1), which
+    # chroots and execs /sbin/launchd (still PID 1). launchd inherits.
+    exec /rescue/chroot /sysroot /sbin/launchd
+fi
+
+# Fallback path: we're a child of /rescue/init via init_script. Set
+# kenv for /rescue/init's chroot, then exit. init.c reads init_chroot
+# at line 333, AFTER the script runs (lines 326-331), so a kenv set
+# here is honored.
 kenv init_chroot=/sysroot
 
 # Unset init_script so init doesn't try to re-run us after the chroot.

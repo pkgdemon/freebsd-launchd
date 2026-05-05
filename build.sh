@@ -362,8 +362,10 @@ mkdir -p "$WORK/cdroot/sbin" "$WORK/cdroot/rescue" "$WORK/cdroot/sysroot" \
 # preserve hardlinks.
 ( cd "$WORK/rootfs" && tar cf - rescue ) | ( cd "$WORK/cdroot" && tar xf - )
 
-# /sbin/init -> /rescue/init. /rescue/init is statically linked.
-ln -sf /rescue/init "$WORK/cdroot/sbin/init"
+# No /sbin/init symlink — loader.conf's init_path is explicit
+# ("/init.sh:/rescue/init") so the kernel goes straight to /init.sh
+# (Option D) or falls back to /rescue/init. The default /sbin/init
+# search slot is never consulted.
 
 # Ship /etc/login.conf (+ compiled .db) on the cd9660 root.
 # Without this, login_getclass() called early in boot -- before the
