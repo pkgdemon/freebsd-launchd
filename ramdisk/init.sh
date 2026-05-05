@@ -81,13 +81,11 @@ if [ "$$" = "1" ]; then
     # replaces this shell with /rescue/chroot (preserving PID 1), which
     # chroots and execs /sbin/launchd (still PID 1). launchd inherits.
     #
-    # Redirect stderr to /var/log/launchd.log in the chrooted rootfs
-    # before the chroot+exec — Apple's launchd routes through asl /
-    # unified logging and never writes to the console; we approximate
-    # by sending launchd's stderr to a log file (on the unionfs tmpfs
-    # upper; lost on reboot, fine for boot diagnostics) instead of
-    # /dev/console. Console stays clean for kernel printf only.
-    exec 2>>/sysroot/var/log/launchd.log
+    # stderr stays connected to /dev/console (set near the top of this
+    # script) — same posture as macOS verbose boot, where launchd's
+    # NOTICE/INFO/ERR messages are visible on the console as services
+    # start up. DEBUG-level noise (orphan reaps) is acceptable for now;
+    # silencing it is a future log.c change.
     exec /rescue/chroot /sysroot /sbin/launchd
 fi
 
