@@ -27,10 +27,12 @@ libffi
 # blobs many modern GPUs need.
 drm-latest-kmod
 
-# NOTE: nvidia-drm-latest-kmod intentionally NOT in this list while
-# Intel-only testing is in progress. Re-add when ready to test Nvidia
-# hardware (also needs `hw.nvidiadrm.modeset="1"` in /boot/loader.conf
-# and a corresponding nvidia.kext personality in kmodloader).
+# NVIDIA DRM driver: nvidia.ko + nvidia-modeset.ko + nvidia-drm.ko.
+# kmodloader loads this when it detects vendor=0x10de in pciconf -l;
+# loader.conf sets hw.nvidiadrm.modeset=1 so DRM/KMS engages on load.
+# Restricted-distribution NVIDIA blob — pkg requires LICENSES_ACCEPTED=
+# NVIDIA at install time (set in build.sh's pkg invocation env).
+nvidia-drm-latest-kmod
 
 # WiFi firmware blobs. Each wifi-firmware-*-kmod packages firmware-only,
 # loaded automatically when the corresponding driver kld attaches:

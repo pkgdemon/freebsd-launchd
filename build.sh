@@ -123,7 +123,13 @@ if [ -n "$RUNTIME_PKGS" ] || [ -n "$BUILD_PKGS" ]; then
         echo "==> installing runtime packages:"
         echo "$RUNTIME_PKGS" | sed 's/^/    /'
         # shellcheck disable=SC2086
-        chroot "$WORK/rootfs" env ASSUME_ALWAYS_YES=yes IGNORE_OSVERSION=yes \
+        # LICENSES_ACCEPTED=NVIDIA: nvidia-drm-latest-kmod is a
+        # restricted-distribution blob and pkg refuses to install it
+        # without explicit license acceptance.
+        chroot "$WORK/rootfs" env \
+            ASSUME_ALWAYS_YES=yes \
+            IGNORE_OSVERSION=yes \
+            LICENSES_ACCEPTED=NVIDIA \
             pkg install -y $RUNTIME_PKGS
     else
         echo "==> pkglist.txt empty; skipping runtime pkg install"
