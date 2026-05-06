@@ -6,12 +6,21 @@ Licensed under BSD-2-Clause (see LICENSE).
 This product includes software developed by:
 
   - Apple Inc.
-    (launchd, 2005-2012, Apache License 2.0)
-    https://github.com/apple/launchd
-    Modified by freebsd-launchd contributors; see git log.
-    Modified files retain the @APPLE_APACHE_LICENSE_HEADER_START@
-    block at the top of each file. Per Apache 2.0 §4(b), modified files
-    carry a "Modified by..." note immediately below the Apple header.
+    (launchd-842.1.4, 2005-2012, Apache License 2.0)
+    https://github.com/apple-oss-distributions/launchd
+    Imported under src/. Modified by freebsd-launchd contributors;
+    see git log. Modified files retain the
+    @APPLE_APACHE_LICENSE_HEADER_START@ block at the top of each
+    file. Per Apache 2.0 §4(b), modified files carry a "Modified
+    by..." note immediately below the Apple header.
+
+  - Apple Inc.
+    (configd-963.270.3, 2000-2024, APSL 2.0)
+    https://github.com/apple-oss-distributions/configd
+    Imported under configd/src/. Modified by freebsd-launchd
+    contributors; see git log. Per-file APSL 2.0 headers preserved
+    on Apple-derived files. Modifications inherit APSL 2.0 via
+    inbound=outbound; the top-level repo license remains BSD-2-Clause.
 
   - Apple Inc. and the Swift project authors
     (swift-corelibs-libdispatch, Apache License 2.0
