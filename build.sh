@@ -410,6 +410,18 @@ mkdir -p "$WORK/cdroot/sbin" "$WORK/cdroot/rescue" "$WORK/cdroot/sysroot" \
 # GhostBSD's livecd hits the same issue and ships login.conf in their
 # ramdisk for the same reason. lib/libutil/login_cap.c:349 emits the
 # warning; it goes away as soon as login.conf is reachable.
+# mkisoimages.sh runs `makefs -D -N $cdroot/etc -t cd9660 ...`. The -N
+# flag tells makefs to read user/group databases from $cdroot/etc when
+# resolving uname=/gname= in the metalog. So we need passwd, master.passwd,
+# group, and the compiled .db forms here too. Build-time only — after
+# /init.sh chroots into /sysroot, the running system reads /etc from the
+# unionfs (rootfs.uzip + tmpfs), not from the cdroot.
+for f in passwd master.passwd group pwd.db spwd.db; do
+    if [ -f "$WORK/rootfs/etc/$f" ]; then
+        cp "$WORK/rootfs/etc/$f" "$WORK/cdroot/etc/$f"
+    fi
+done
+
 cp "$WORK/rootfs/etc/login.conf" "$WORK/cdroot/etc/login.conf"
 [ -f "$WORK/rootfs/etc/login.conf.db" ] && \
     cp "$WORK/rootfs/etc/login.conf.db" "$WORK/cdroot/etc/login.conf.db"
