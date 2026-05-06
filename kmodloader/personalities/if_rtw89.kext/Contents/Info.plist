@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  if_rtw89.kext — Realtek 89xx-family WiFi (Wi-Fi 6 / 6E / 7).
+
+  Driven by FreeBSD's rtw89 LinuxKPI port; kld is if_rtw89.ko.
+  Firmware blobs ship in rtw89-firmware-kmod. Covers RTL8852A/B/C
+  (Wi-Fi 6 / 6E) and RTL8922A (Wi-Fi 7) — common in 2022+ laptops.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>org.freebsd.kext.if_rtw89</string>
+    <key>CFBundleExecutable</key>
+    <string>if_rtw89</string>
+    <key>OSBundleRequired</key>
+    <string>Network</string>
+
+    <key>IOKitPersonalities</key>
+    <dict>
+        <key>RealtekRTW89</key>
+        <dict>
+            <key>IOMatchCategory</key>
+            <string>PCI</string>
+            <key>IOPCIMatch</key>
+            <array>
+                <string>0x10EC:0x8852</string>  <!-- RTL8852AE -->
+                <string>0x10EC:0xA852</string>  <!-- RTL8852BE -->
+                <string>0x10EC:0xB852</string>  <!-- RTL8852CE -->
+                <string>0x10EC:0xB85A</string>  <!-- RTL8852CE alt -->
+                <string>0x10EC:0x8851</string>  <!-- RTL8851BE -->
+                <string>0x10EC:0x8922</string>  <!-- RTL8922AE -->
+            </array>
+            <key>IOProbeScore</key>
+            <integer>200</integer>
+        </dict>
+    </dict>
+</dict>
+</plist>

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  if_rtw88.kext — Realtek 88xx-family WiFi (Wi-Fi 5 era).
+
+  Driven by FreeBSD's rtw88 LinuxKPI port; kld is if_rtw88.ko.
+  Firmware blobs ship in rtw88-firmware-kmod. Covers RTL8821C,
+  RTL8822B, RTL8822C, RTL8723D — common in budget laptops circa
+  2018-2021. Wi-Fi 6 Realtek (8852A/B/C, 8851B, 8922A) belongs to
+  if_rtw89 — separate personality.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>org.freebsd.kext.if_rtw88</string>
+    <key>CFBundleExecutable</key>
+    <string>if_rtw88</string>
+    <key>OSBundleRequired</key>
+    <string>Network</string>
+
+    <key>IOKitPersonalities</key>
+    <dict>
+        <key>RealtekRTW88</key>
+        <dict>
+            <key>IOMatchCategory</key>
+            <string>PCI</string>
+            <key>IOPCIMatch</key>
+            <array>
+                <string>0x10EC:0xB822</string>  <!-- RTL8822BE -->
+                <string>0x10EC:0xC822</string>  <!-- RTL8822CE -->
+                <string>0x10EC:0xC821</string>  <!-- RTL8821CE -->
+                <string>0x10EC:0xB821</string>  <!-- RTL8821AE -->
+                <string>0x10EC:0xB820</string>  <!-- RTL8821AE alt -->
+                <string>0x10EC:0xB723</string>  <!-- RTL8723BE -->
+                <string>0x10EC:0xD723</string>  <!-- RTL8723DE -->
+            </array>
+            <key>IOProbeScore</key>
+            <integer>200</integer>
+        </dict>
+    </dict>
+</dict>
+</plist>
