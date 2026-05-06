@@ -19,3 +19,16 @@ icu
 # build time but removed by `pkg autoremove` after the buildpkgs purge.
 # Pin it explicitly here so it stays on the ISO.
 libffi
+
+# GPU kernel modules. Loaded by kmodloader at boot when matching
+# hardware is present (Phase 1+ of the freebsd-kmodloader plan); for
+# now just shipped on the ISO so users can `kldload i915kms`,
+# `kldload amdgpu`, etc. by hand. Pulls drm-kmod-firmware-* for the
+# blobs many modern GPUs need.
+drm-latest-kmod
+
+# NVIDIA DRM shim — nvidia-drm.ko + nvidia-modeset.ko + nvidia.ko.
+# Restricted-distribution NVIDIA blob; pkg may require
+# LICENSES_ACCEPTED=NVIDIA. If install fails in CI, that's the lever
+# to pull in build.sh's pkg invocation env.
+nvidia-drm-latest-kmod
