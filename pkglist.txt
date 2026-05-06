@@ -32,14 +32,14 @@ drm-latest-kmod
 # hardware (also needs `hw.nvidiadrm.modeset="1"` in /boot/loader.conf
 # and a corresponding nvidia.kext personality in kmodloader).
 
-# WiFi firmware blobs. Each *-firmware-kmod packages firmware-only,
+# WiFi firmware blobs. Each wifi-firmware-*-kmod packages firmware-only,
 # loaded automatically when the corresponding driver kld attaches:
 #   wifi-firmware-iwlwifi-kmod  -> if_iwlwifi   (Intel AC8xxx/9xxx, AX, BE)
-#   rtw88-firmware-kmod         -> if_rtw88     (Realtek Wi-Fi 5 era)
-#   rtw89-firmware-kmod         -> if_rtw89     (Realtek Wi-Fi 6 / 6E / 7)
+#   wifi-firmware-rtw88-kmod    -> if_rtw88     (Realtek Wi-Fi 5 era)
+#   wifi-firmware-rtw89-kmod    -> if_rtw89     (Realtek Wi-Fi 6 / 6E / 7)
 # Drivers themselves are in base.txz; kmodloader matches via
 # personality plists in /System/Library/Extensions and kldloads when
 # matching hardware is present.
 wifi-firmware-iwlwifi-kmod
-rtw88-firmware-kmod
-rtw89-firmware-kmod
+wifi-firmware-rtw88-kmod
+wifi-firmware-rtw89-kmod
