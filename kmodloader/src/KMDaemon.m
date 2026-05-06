@@ -22,11 +22,12 @@
  *    only mode, doesn't gain new device IDs. amdgpu is the open
  *    default that picks up everything new.
  *
- * 3. Hypervisor scan — covers VirtualBox / VMware guest additions
- *    that ship as ports kmods. Reads kern.vm_guest and routes:
- *      vbox    → vboxguest, vboxvideo
- *      vmware  → vmci, vmmemctl, vmxnet3, vmware_drv
- *      kvm/qemu/hv/xen/none → no action (all covered by GENERIC).
+ * 3. Hypervisor scan — covers VirtualBox guest additions that ship
+ *    as ports kmods. Reads kern.vm_guest and routes:
+ *      vbox    → vboxguest, vboxvfs (shared folders fs)
+ *      vmware  → no kmods (open-vm-tools is all userspace daemons;
+ *                vmx paravirt NIC is in GENERIC)
+ *      kvm/qemu/bhyve/hv/xen/none → no action (all covered by GENERIC).
  *
  * Loaded klds are deduped and the GPU drivers run first so the
  * framebuffer / drmn0 is up before peripheral drivers attach.
@@ -235,24 +236,30 @@
 }
 
 /* Read kern.vm_guest and return any VM-specific klds we should load.
- * GENERIC already covers virtio (kvm/qemu/bhyve), Hyper-V, and Xen
- * guest paths in-kernel; only VBox and VMware need ports kmods.
+ * GENERIC already covers virtio (kvm/qemu/bhyve), Hyper-V, vmxnet3
+ * (vmx driver), and Xen guest paths in-kernel.
  *
- * For these to actually load, the corresponding additions package
- * must be on the ISO:
- *   vbox    → emulators/virtualbox-ose-additions-nox11
- *   vmware  → emulators/open-vm-tools-nox11
- * Without the package the kldload fails harmless and we move on. */
+ * VirtualBox guest additions (emulators/virtualbox-ose-additions-nox11)
+ * ship two real klds we want loaded:
+ *   vboxguest.ko  – core guest-additions infrastructure
+ *   vboxvfs.ko    – shared folders filesystem
+ * NOT vboxvideo — that's a Linux thing; on FreeBSD VBox guest video
+ * uses the VMware-emulated SVGA path (xf86-video-vmware) or scfb/vesa.
+ *
+ * VMware guest additions (emulators/open-vm-tools-nox11) ship ZERO
+ * klds — everything is userspace daemons (vmtoolsd, vmware-hgfsclient,
+ * mount_vmblock). Those need their own launchd plists, not kmodloader.
+ * The kernel side (vmx for paravirt NIC, vmblock_fuse via fuse) is
+ * either in GENERIC or fuse-loaded on demand.
+ *
+ * If the package isn't installed, kldload fails harmlessly. */
 - (NSArray<NSString *> *)hypervisorKlds
 {
     NSString *vmGuest = [self sysctlString:@"kern.vm_guest"];
     if ([vmGuest isEqualToString:@"vbox"]) {
-        return @[@"vboxguest", @"vboxvideo"];
+        return @[@"vboxguest", @"vboxvfs"];
     }
-    if ([vmGuest isEqualToString:@"vmware"]) {
-        return @[@"vmci", @"vmmemctl", @"vmxnet3", @"vmware_drv"];
-    }
-    /* none, kvm, qemu, bhyve, hv, xen: nothing extra needed. */
+    /* vmware, none, kvm, qemu, bhyve, hv, xen: no kmods needed. */
     return @[];
 }
 

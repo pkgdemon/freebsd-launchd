@@ -46,12 +46,28 @@ wifi-firmware-iwlwifi-kmod
 wifi-firmware-rtw88-kmod
 wifi-firmware-rtw89-kmod
 
-# Hypervisor guest additions. kmodloader reads kern.vm_guest at boot
-# and kldloads these only when the corresponding hypervisor is detected:
-#   virtualbox-ose-additions-nox11  -> vboxguest, vboxvideo (VBox)
-#   open-vm-tools-nox11             -> vmci, vmmemctl, vmxnet3, vmware_drv
+# Hypervisor guest additions.
+#
+# virtualbox-ose-additions-nox11 ships REAL klds — vboxguest.ko (core
+# guest infrastructure) and vboxvfs.ko (shared folders filesystem) —
+# plus userspace VBoxService/VBoxControl/mount_vboxvfs. kmodloader
+# reads kern.vm_guest=="vbox" at boot and kldloads vboxguest +
+# vboxvfs. NO vboxvideo — that's a Linux thing; VBox guest video on
+# FreeBSD goes through xf86-video-vmware or scfb/vesa.
+#
+# open-vm-tools-nox11 ships ZERO klds. All userspace: vmtoolsd,
+# vmware-hgfsclient, mount_vmblock, etc. The kernel side (vmx
+# paravirt NIC) is in GENERIC; vmblock-fuse uses base fuse. We ship
+# the package for the userspace tools (shared folders + clipboard
+# integration via vmtoolsd), but kmodloader doesn't try to kldload
+# anything for vmware — there's nothing to load.
+#
 # QEMU/KVM/bhyve/Hyper-V/Xen guests are covered by GENERIC kernel
-# (virtio, hv_*, xenpci built-in) — no extra kmods needed.
+# (virtio_*, hv_*, xenpci built-in) — no extra kmods needed.
+#
+# Userspace daemons (VBoxService, vmtoolsd) need separate launchd
+# plists for full guest-additions UX (clipboard, time sync, screen
+# resize). Phase 2+ work; not shipped yet.
 virtualbox-ose-additions-nox11
 open-vm-tools-nox11
 
