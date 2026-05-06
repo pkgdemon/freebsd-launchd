@@ -5,7 +5,6 @@
  *   network_interfaces="auto"          -> enumerate via getifaddrs(3)
  *   ifconfig_DEFAULT="DHCP"            -> default to dhclient
  *   synchronous_dhclient="NO" / -b     -> dhclient -b (background)
- *   dhclient_flags="-n"                -> preserve existing lease
  *   ipv6_activate_all_interfaces="YES" -> ifconfig $iface inet6 accept_rtadv
  *   rtsold_enable="YES"                -> rtsold -a
  *
@@ -21,6 +20,9 @@
 
 #import <ifaddrs.h>
 #import <net/if.h>
+#import <net/if_media.h>
+#import <sys/ioctl.h>
+#import <sys/socket.h>
 #import <syslog.h>
 #import <unistd.h>
 
@@ -108,10 +110,54 @@ static NSString *const kLocalLaunchDaemons = @"/Local/Library/LaunchDaemons";
              args:@[ifname, @"inet6", @"accept_rtadv", @"auto_linklocal"]
              wait:YES];
 
-    /* dhclient -b -n <iface>: -b = background, -n = preserve existing lease */
+    /* Skip dhclient if there's no carrier on the interface. With -b
+     * dhclient is supposed to fork into the background after its first
+     * DHCPDISCOVER attempt, but on a link-down interface it never sends
+     * that first DISCOVER — it sits in the foreground waiting for media
+     * to come up — which holds back boot. Phase 2's PF_ROUTE source
+     * will start dhclient on demand when a cable is plugged in later. */
+    if (![self interfaceHasLink:ifname]) {
+        NSLog(@"netconfigd: %@: no carrier, skipping dhclient (Phase 2 will retry on link-up)",
+              ifname);
+        return;
+    }
+
+    /* dhclient -b <iface>: background after first DISCOVER attempt. */
     [self runTool:@"/sbin/dhclient"
-             args:@[@"-b", @"-n", ifname]
+             args:@[@"-b", ifname]
              wait:NO];
+}
+
+- (BOOL)interfaceHasLink:(NSString *)ifname {
+    /* SIOCGIFMEDIA + IFM_AVALID/IFM_ACTIVE is what ifconfig(8) itself
+     * uses to print "status: active" / "status: no carrier". Drivers
+     * without media support (some pseudo / virtio cases) return ENOTTY;
+     * we conservatively treat that as "link present" so dhclient gets
+     * a chance to run. */
+    int s = socket(AF_INET, SOCK_DGRAM, 0);
+    if (s < 0) {
+        NSLog(@"netconfigd: %@: socket() for media query failed: %s; assuming link",
+              ifname, strerror(errno));
+        return YES;
+    }
+
+    struct ifmediareq ifmr;
+    memset(&ifmr, 0, sizeof(ifmr));
+    strncpy(ifmr.ifm_name, ifname.UTF8String, sizeof(ifmr.ifm_name) - 1);
+
+    int rv = ioctl(s, SIOCGIFMEDIA, &ifmr);
+    close(s);
+
+    if (rv < 0) {
+        /* No media support on this iface — usually means a virtio_net or
+         * pseudo device. Don't gate dhclient on this. */
+        return YES;
+    }
+    if (!(ifmr.ifm_status & IFM_AVALID)) {
+        /* Driver hasn't decided yet; let dhclient try. */
+        return YES;
+    }
+    return (ifmr.ifm_status & IFM_ACTIVE) != 0;
 }
 
 - (void)startRtsold {
