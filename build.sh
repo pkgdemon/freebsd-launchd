@@ -62,9 +62,16 @@ for repo in $UPSTREAMS; do
 done
 
 #
-# 1. fetch base.txz + kernel.txz
+# 1. fetch base.txz + kernel.txz + src.txz
 #
-for f in base.txz kernel.txz; do
+# src.txz gives us /usr/src/release/amd64/mkisoimages.sh — the FreeBSD
+# release engineering script that builds the hybrid (BIOS + UEFI El
+# Torito + GPT-overlaid for USB-stick dd) cd9660. Replaces the
+# hand-rolled makefs invocation we used to do; the script's hybrid-GPT
+# step at the end of mkisoimages.sh is what makes the same .iso file
+# bootable from both optical media and a dd'd USB stick.
+#
+for f in base.txz kernel.txz src.txz; do
     if [ ! -f "$DIST/$f" ]; then
         echo "==> downloading $f"
         fetch -o "$DIST/$f" "$MIRROR/$f"
@@ -464,43 +471,53 @@ du -sh "$WORK/cdroot/boot" "$WORK/cdroot/boot/kernel" || true
 ls -la "$WORK/cdroot/boot/kernel/" || true
 
 #
-# 9. EFI System Partition (FAT16, /EFI/BOOT/BOOTX64.EFI inside) and a copy
-#    of the EFI loader at the cd9660 root for OVMF's ISO9660 discovery.
+# 9. extract src.txz to expose FreeBSD's release scripts.
 #
-echo "==> building EFI System Partition"
-ESP="$WORK/efi.img"
-ESPROOT="$WORK/efi-staging"
-mkdir -p "$ESPROOT/EFI/BOOT"
+# We don't build from source — we just need /usr/src/release/amd64/
+# mkisoimages.sh and its sister scripts (tools.subr, install-boot.sh)
+# for the next step.
+#
+echo "==> extracting src.txz for FreeBSD release scripts"
+mkdir -p "$WORK/freebsd-src"
+tar -xJf "$DIST/src.txz" -C "$WORK/freebsd-src"
+
+#
+# 10. stage cd9660-direct UEFI fallback.
+#
+# /EFI/BOOT/BOOTX64.EFI in the cd9660 root is a fallback path for
+# firmware that mounts the ISO as a filesystem rather than walking the
+# El Torito boot catalog. mkisoimages.sh handles the El Torito ESP
+# itself (via make_esp_file in tools/boot/install-boot.sh), so we only
+# stage this fallback copy here.
+#
+mkdir -p "$WORK/cdroot/EFI/BOOT"
 if [ -f "$WORK/rootfs/boot/loader_lua.efi" ]; then
-    EFI_LOADER="$WORK/rootfs/boot/loader_lua.efi"
+    cp "$WORK/rootfs/boot/loader_lua.efi" "$WORK/cdroot/EFI/BOOT/BOOTX64.EFI"
 elif [ -f "$WORK/rootfs/boot/loader.efi" ]; then
-    EFI_LOADER="$WORK/rootfs/boot/loader.efi"
+    cp "$WORK/rootfs/boot/loader.efi" "$WORK/cdroot/EFI/BOOT/BOOTX64.EFI"
 else
     echo "ERROR: no loader.efi found in base.txz boot/"
     exit 1
 fi
-echo "==> EFI loader: $EFI_LOADER"
-cp "$EFI_LOADER" "$ESPROOT/EFI/BOOT/BOOTX64.EFI"
-makefs -t msdos -s 32m -o fat_type=16,sectors_per_cluster=1 \
-    "$ESP" "$ESPROOT"
-mkdir -p "$WORK/cdroot/EFI/BOOT"
-cp "$EFI_LOADER" "$WORK/cdroot/EFI/BOOT/BOOTX64.EFI"
 
 #
-# 10. final cd9660 (hybrid BIOS + UEFI El Torito)
+# 11. build hybrid ISO via FreeBSD's own mkisoimages.sh.
 #
-echo "==> building ISO"
-BOOTABLE_ARGS=""
-if [ -f "$WORK/cdroot/boot/cdboot" ]; then
-    BOOTABLE_ARGS="-o bootimage=i386;$WORK/cdroot/boot/cdboot -o no-emul-boot"
-fi
-BOOTABLE_ARGS="$BOOTABLE_ARGS -o bootimage=i386;$ESP -o no-emul-boot -o platformid=efi"
-
-# shellcheck disable=SC2086
-makefs -D -N "$WORK/rootfs/etc" -t cd9660 \
-    -o rockridge -o label="$LABEL" \
-    $BOOTABLE_ARGS \
-    "$OUT/livecd.iso" "$WORK/cdroot"
+# Same script releng uses for disc1.iso. Produces a cd9660 with:
+#   - El Torito BIOS boot (via boot/cdboot)
+#   - El Torito UEFI boot (via an ESP image built from boot/loader.efi)
+#   - GPT/PMBR overlay in the System Area so the same blob is also a
+#     valid GPT-partitioned disk image: dd it to a USB stick and the
+#     stick boots on both BIOS (via PMBR + freebsd-boot/boot/isoboot)
+#     and UEFI (via the EFI partition aliased to the ESP).
+# Reads boot files from $WORK/cdroot which already has cdboot,
+# loader.efi, pmbr, isoboot in place from §8's copy loop.
+#
+echo "==> building hybrid ISO via mkisoimages.sh"
+MKISO="$WORK/freebsd-src/usr/src/release/amd64/mkisoimages.sh"
+[ -f "$MKISO" ] || { echo "ERROR: $MKISO not found in src.txz" >&2; exit 1; }
+chmod +x "$MKISO"
+"$MKISO" -b "$LABEL" "$OUT/livecd.iso" "$WORK/cdroot"
 
 ls -lh "$OUT/livecd.iso"
 sha256 "$OUT/livecd.iso" 2>/dev/null || sha256sum "$OUT/livecd.iso"
