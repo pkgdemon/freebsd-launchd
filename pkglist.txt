@@ -45,3 +45,12 @@ nvidia-drm-latest-kmod
 wifi-firmware-iwlwifi-kmod
 wifi-firmware-rtw88-kmod
 wifi-firmware-rtw89-kmod
+
+# Hypervisor guest additions. kmodloader reads kern.vm_guest at boot
+# and kldloads these only when the corresponding hypervisor is detected:
+#   virtualbox-ose-additions-nox11  -> vboxguest, vboxvideo (VBox)
+#   open-vm-tools-nox11             -> vmci, vmmemctl, vmxnet3, vmware_drv
+# QEMU/KVM/bhyve/Hyper-V/Xen guests are covered by GENERIC kernel
+# (virtio, hv_*, xenpci built-in) — no extra kmods needed.
+virtualbox-ose-additions-nox11
+open-vm-tools-nox11

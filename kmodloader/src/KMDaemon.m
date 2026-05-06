@@ -22,6 +22,12 @@
  *    only mode, doesn't gain new device IDs. amdgpu is the open
  *    default that picks up everything new.
  *
+ * 3. Hypervisor scan — covers VirtualBox / VMware guest additions
+ *    that ship as ports kmods. Reads kern.vm_guest and routes:
+ *      vbox    → vboxguest, vboxvideo
+ *      vmware  → vmci, vmmemctl, vmxnet3, vmware_drv
+ *      kvm/qemu/hv/xen/none → no action (all covered by GENERIC).
+ *
  * Loaded klds are deduped and the GPU drivers run first so the
  * framebuffer / drmn0 is up before peripheral drivers attach.
  *
@@ -38,6 +44,8 @@
 - (NSArray<NSString *> *)kldsFromDevmatch;
 - (NSArray<NSDictionary *> *)gpuDevices;
 - (NSArray<NSString *> *)gpuKldsForDevices:(NSArray<NSDictionary *> *)devices;
+- (NSArray<NSString *> *)hypervisorKlds;
+- (NSString *)sysctlString:(NSString *)name;
 - (NSSet<NSString *> *)loadedKlds;
 - (BOOL)kldload:(NSString *)kld;
 @end
@@ -53,14 +61,21 @@
     NSLog(@"kmodloader: %lu GPU device(s) → %lu kld(s)",
           (unsigned long)gpuDevices.count, (unsigned long)gpuKlds.count);
 
+    NSArray<NSString *> *vmKlds = [self hypervisorKlds];
+    NSLog(@"kmodloader: hypervisor → %lu kld(s)",
+          (unsigned long)vmKlds.count);
+
     NSArray<NSString *> *devmatchKlds = [self kldsFromDevmatch];
     NSLog(@"kmodloader: devmatch suggests %lu kld(s)",
           (unsigned long)devmatchKlds.count);
 
     /* GPU first — once the framebuffer is owned by a DRM driver, peripheral
-     * driver loads can't visibly disrupt it. Then the devmatch set. */
+     * driver loads can't visibly disrupt it. Then VM klds (provide
+     * resolution change / clipboard / etc. on top of DRM). Then the
+     * devmatch set fills in the rest. */
     NSMutableOrderedSet<NSString *> *plan = [NSMutableOrderedSet orderedSet];
     [plan addObjectsFromArray:gpuKlds];
+    [plan addObjectsFromArray:vmKlds];
     [plan addObjectsFromArray:devmatchKlds];
 
     NSSet<NSString *> *loaded = [self loadedKlds];
@@ -217,6 +232,50 @@
         }
     }
     return r.array;
+}
+
+/* Read kern.vm_guest and return any VM-specific klds we should load.
+ * GENERIC already covers virtio (kvm/qemu/bhyve), Hyper-V, and Xen
+ * guest paths in-kernel; only VBox and VMware need ports kmods.
+ *
+ * For these to actually load, the corresponding additions package
+ * must be on the ISO:
+ *   vbox    → emulators/virtualbox-ose-additions-nox11
+ *   vmware  → emulators/open-vm-tools-nox11
+ * Without the package the kldload fails harmless and we move on. */
+- (NSArray<NSString *> *)hypervisorKlds
+{
+    NSString *vmGuest = [self sysctlString:@"kern.vm_guest"];
+    if ([vmGuest isEqualToString:@"vbox"]) {
+        return @[@"vboxguest", @"vboxvideo"];
+    }
+    if ([vmGuest isEqualToString:@"vmware"]) {
+        return @[@"vmci", @"vmmemctl", @"vmxnet3", @"vmware_drv"];
+    }
+    /* none, kvm, qemu, bhyve, hv, xen: nothing extra needed. */
+    return @[];
+}
+
+- (NSString *)sysctlString:(NSString *)name
+{
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = @"/sbin/sysctl";
+    task.arguments = @[@"-n", name];
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    task.standardError = [NSPipe pipe];
+    @try {
+        [task launch];
+        [task waitUntilExit];
+    } @catch (NSException *exc) {
+        return @"";
+    }
+    if (task.terminationStatus != 0) return @"";
+    NSData *data = [pipe.fileHandleForReading readDataToEndOfFile];
+    NSString *raw = [[NSString alloc] initWithData:data
+                                          encoding:NSUTF8StringEncoding];
+    return [raw stringByTrimmingCharactersInSet:
+            NSCharacterSet.whitespaceAndNewlineCharacterSet];
 }
 
 /* Parse kldstat -v for the set of currently-loaded kld basenames. */
