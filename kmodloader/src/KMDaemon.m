@@ -1,20 +1,32 @@
 /*
- * KMDaemon.m — top-level coordinator (Phase 1).
+ * KMDaemon.m — top-level coordinator (Phase 1d, devmatch-driven).
+ *
+ * Strategy: delegate (device, kld) matching entirely to devmatch(8).
+ * devmatch reads /boot/kernel/linker.hints (and the per-pkg hints in
+ * /boot/modules/linker.hints), which kldxref(8) generated from each
+ * driver's PNP_INFO macros. With -a it walks the live device tree and
+ * emits one kld name per unattached device that has a matching driver.
+ * Output is just a list of kld names — we kldload each.
+ *
+ * Why not Apple-shaped IOPCIMatch personality plists? They require
+ * hand-maintaining (vendor:device) lists per driver — Apple ships
+ * finite hardware, FreeBSD's PNP database is the size of the entire
+ * driver ecosystem. Hand-curated personality plists were a Phase 1
+ * stopgap; linker.hints is the authoritative source.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  * Copyright (c) 2026 freebsd-launchd contributors.
  */
 
 #import "KMDaemon.h"
-#import "KMRegistry.h"
-#import "KMDevice.h"
-#import "KMBusEnumerate.h"
-#import "KMMatch.h"
 
 #import <unistd.h>
 
-static NSString *const kSystemExtensions = @"/System/Library/Extensions";
-static NSString *const kLocalExtensions  = @"/Local/Library/Extensions";
+@interface KMDaemon ()
+- (NSArray<NSString *> *)kldsFromDevmatch;
+- (NSSet<NSString *> *)loadedKlds;
+- (BOOL)kldload:(NSString *)kld;
+@end
 
 @implementation KMDaemon
 
@@ -22,47 +34,66 @@ static NSString *const kLocalExtensions  = @"/Local/Library/Extensions";
 {
     NSLog(@"kmodloader: starting (pid=%d)", getpid());
 
-    KMRegistry *registry = [[KMRegistry alloc] init];
-    [registry loadFromExtensionsDir:kSystemExtensions];
-    [registry loadFromExtensionsDir:kLocalExtensions];
-    NSLog(@"kmodloader: loaded %lu personalities",
-          (unsigned long)registry.personalities.count);
-
-    NSArray<KMDevice *> *devices = [KMBusEnumerate enumerateAttachedDevices];
-    NSLog(@"kmodloader: enumerated %lu devices via sysctl dev.",
-          (unsigned long)devices.count);
+    NSArray<NSString *> *needed = [self kldsFromDevmatch];
+    NSLog(@"kmodloader: devmatch suggests %lu kld(s)", (unsigned long)needed.count);
 
     NSSet<NSString *> *loaded = [self loadedKlds];
-    NSUInteger matched = 0;
     NSUInteger loadedNow = 0;
 
-    for (KMDevice *device in devices) {
-        NSString *kld = [KMMatch bestMatchForDevice:device inRegistry:registry];
-        if (!kld) {
-            continue;
-        }
-        matched++;
+    for (NSString *kld in needed) {
         if ([loaded containsObject:kld]) {
-            NSLog(@"kmodloader: %@: matched %@ but already loaded; skip",
-                  device.name, kld);
+            NSLog(@"kmodloader: %@ already loaded; skip", kld);
             continue;
         }
-        NSLog(@"kmodloader: %@ (vendor=%@ device=%@): matched %@, loading",
-              device.name,
-              device.pciVendorID ?: @"-",
-              device.pciDeviceID ?: @"-",
-              kld);
         if ([self kldload:kld]) {
             loadedNow++;
         }
     }
 
-    NSLog(@"kmodloader: done (matched=%lu, loaded-now=%lu)",
-          (unsigned long)matched, (unsigned long)loadedNow);
+    NSLog(@"kmodloader: done (loaded-now=%lu)", (unsigned long)loadedNow);
 }
 
-/* Returns the set of currently-loaded kld names (without .ko extension).
- * Parses kldstat -v output. */
+/* Run `devmatch -a` and parse one-kld-per-line output. .ko suffix is
+ * stripped so the names align with kldstat -v's "Contains modules:"
+ * basenames and so kldload -n accepts them. */
+- (NSArray<NSString *> *)kldsFromDevmatch
+{
+    NSTask *task = [[NSTask alloc] init];
+    task.launchPath = @"/usr/sbin/devmatch";
+    task.arguments = @[@"-a"];
+    NSPipe *pipe = [NSPipe pipe];
+    task.standardOutput = pipe;
+    task.standardError = [NSPipe pipe];
+    @try {
+        [task launch];
+        [task waitUntilExit];
+    } @catch (NSException *exc) {
+        NSLog(@"kmodloader: devmatch -a failed to launch: %@", exc.reason);
+        return @[];
+    }
+    if (task.terminationStatus != 0) {
+        NSLog(@"kmodloader: devmatch -a exited %d", task.terminationStatus);
+        return @[];
+    }
+
+    NSData *data = [pipe.fileHandleForReading readDataToEndOfFile];
+    NSString *output = [[NSString alloc] initWithData:data
+                                             encoding:NSUTF8StringEncoding];
+
+    NSMutableOrderedSet<NSString *> *result = [NSMutableOrderedSet orderedSet];
+    for (NSString *raw in [output componentsSeparatedByString:@"\n"]) {
+        NSString *line = [raw stringByTrimmingCharactersInSet:
+                          NSCharacterSet.whitespaceCharacterSet];
+        if (line.length == 0) continue;
+        if ([line hasSuffix:@".ko"]) {
+            line = [line stringByDeletingPathExtension];
+        }
+        [result addObject:line];
+    }
+    return result.array;
+}
+
+/* Parse kldstat -v for the set of currently-loaded kld basenames. */
 - (NSSet<NSString *> *)loadedKlds
 {
     NSTask *task = [[NSTask alloc] init];
@@ -78,26 +109,17 @@ static NSString *const kLocalExtensions  = @"/Local/Library/Extensions";
         NSLog(@"kmodloader: kldstat failed: %@", exc.reason);
         return [NSSet set];
     }
+
     NSData *data = [pipe.fileHandleForReading readDataToEndOfFile];
     NSString *output = [[NSString alloc] initWithData:data
-                                              encoding:NSUTF8StringEncoding];
+                                             encoding:NSUTF8StringEncoding];
+
     NSMutableSet<NSString *> *names = [NSMutableSet set];
-    /* kldstat -v lines look like:
-     *  Id Refs Address                Size Name
-     *   1  ...                            kernel
-     *  ...
-     *  10    1 ...                  1234 if_em.ko
-     * Plus indented "Contains modules:" subsections with one module
-     * per line. We grab the .ko filenames, strip extension. */
     for (NSString *line in [output componentsSeparatedByString:@"\n"]) {
-        NSString *trimmed = [line stringByTrimmingCharactersInSet:
-                             [NSCharacterSet whitespaceCharacterSet]];
-        NSArray<NSString *> *fields = [trimmed componentsSeparatedByCharactersInSet:
-                                       [NSCharacterSet whitespaceCharacterSet]];
-        for (NSString *field in fields) {
+        NSCharacterSet *ws = NSCharacterSet.whitespaceCharacterSet;
+        for (NSString *field in [line componentsSeparatedByCharactersInSet:ws]) {
             if ([field hasSuffix:@".ko"]) {
-                NSString *base = [field stringByDeletingPathExtension];
-                [names addObject:base];
+                [names addObject:[field stringByDeletingPathExtension]];
             }
         }
     }
@@ -106,10 +128,11 @@ static NSString *const kLocalExtensions  = @"/Local/Library/Extensions";
 
 - (BOOL)kldload:(NSString *)kld
 {
+    NSLog(@"kmodloader: loading %@", kld);
     NSTask *task = [[NSTask alloc] init];
     task.launchPath = @"/sbin/kldload";
-    /* -n: don't error if already loaded (defensive — we already
-     *     filtered, but races are possible). */
+    /* -n: silently succeed if already loaded (defensive against races
+     *     between our pre-check and the actual load call). */
     task.arguments = @[@"-n", kld];
     @try {
         [task launch];
@@ -122,7 +145,7 @@ static NSString *const kLocalExtensions  = @"/Local/Library/Extensions";
         NSLog(@"kmodloader: kldload %@ exited %d", kld, task.terminationStatus);
         return NO;
     }
-    NSLog(@"kmodloader: %@: loaded successfully", kld);
+    NSLog(@"kmodloader: %@: loaded", kld);
     return YES;
 }
 

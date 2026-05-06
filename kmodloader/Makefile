@@ -1,9 +1,11 @@
 # kmodloader build (FreeBSD).
 #
-# Phase 1 minimal scope: ObjC daemon that walks the sysctl dev. tree,
-# matches devices against personality plists in /System/Library/Extensions
-# and /Local/Library/Extensions, and kldloads any matching kmods.
-# Boot-time matching only; hot-plug via devctl(4) is Phase 2.
+# Phase 1d: ObjC daemon that asks devmatch(8) which klds are needed
+# for the live device tree, then kldloads each. devmatch reads
+# linker.hints (kldxref(8) output, sourced from each driver's
+# PNP_INFO macros) — that's the authoritative (vendor:device → kld)
+# map for the FreeBSD driver ecosystem. Boot-time matching only;
+# hot-plug via /dev/devctl is Phase 2.
 #
 # Plan: https://pkgdemon.github.io/freebsd-kmodloader-plan.html
 
@@ -31,17 +33,10 @@ LDFLAGS := -fuse-ld=lld \
 
 SRCS_M := \
     src/main.m \
-    src/KMDaemon.m \
-    src/KMRegistry.m \
-    src/KMDevice.m \
-    src/KMBusEnumerate.m \
-    src/KMMatch.m
+    src/KMDaemon.m
 
 OBJS := $(SRCS_M:%.m=$(BUILD)/%.o)
 DEPS := $(OBJS:.o=.d)
-
-PERSONALITIES_SRC := personalities
-PERSONALITIES     := $(shell find $(PERSONALITIES_SRC) -name '*.plist' 2>/dev/null)
 
 .PHONY: all
 all: $(BUILD)/kmodloader
@@ -64,21 +59,11 @@ clean:
 	rm -rf $(BUILD)
 
 # Daemon: /usr/libexec/kmodloader (per plan §6 install paths).
-# Personality bundles: /System/Library/Extensions/<name>.kext/Contents/Info.plist
-PREFIX     ?= /usr/libexec
-EXT_PREFIX ?= /System/Library/Extensions
-DESTDIR    ?=
+PREFIX  ?= /usr/libexec
+DESTDIR ?=
 
 .PHONY: install
 install: all
 	@mkdir -p $(DESTDIR)$(PREFIX)
 	@install -m 755 $(BUILD)/kmodloader $(DESTDIR)$(PREFIX)/kmodloader
 	@echo "==> kmodloader installed: $(DESTDIR)$(PREFIX)/kmodloader"
-	@mkdir -p $(DESTDIR)$(EXT_PREFIX)
-	@for plist in $(PERSONALITIES); do \
-	    rel=$${plist#$(PERSONALITIES_SRC)/}; \
-	    dst=$(DESTDIR)$(EXT_PREFIX)/$$rel; \
-	    mkdir -p `dirname $$dst`; \
-	    install -m 644 $$plist $$dst; \
-	    echo "==> personality installed: $$dst"; \
-	done
