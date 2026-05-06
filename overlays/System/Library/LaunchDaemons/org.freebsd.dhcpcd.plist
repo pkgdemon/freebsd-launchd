@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  org.freebsd.dhcpcd.plist
+
+  dhcpcd in master mode (no iface argument), running in foreground via
+  -B so launchd supervises it directly. Replaces the previous
+  dhclient + rtsold pair that netconfigd was orchestrating.
+
+  Master mode means dhcpcd discovers all current network interfaces,
+  watches for new ones via RTM_NEWLINK, runs DHCPv4 + DHCPv6 + RA
+  processing on each as appropriate, recognizes FreeBSD's bridge/lagg/
+  vlan layering and only runs DHCP at the right layer, and re-acquires
+  leases on link-up after a flap. One daemon, all interfaces, full
+  v4 + v6 + hot-plug + link-state coverage.
+
+  Why -B: dhcpcd's default is to fork into the background, which would
+  make launchd mark the job complete the moment dhcpcd's parent exits.
+  -B keeps it foreground so launchd can supervise; KeepAlive=true then
+  respawns it if it dies.
+
+  Why this isn't `org.freebsd.netconfigd`: configd's eventual role is
+  higher-level (scutil IPC, Network.plist watcher, VPN integration).
+  DHCP-and-RA is dhcpcd's job; configd will sit on top of it in Phase 2.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.freebsd.dhcpcd</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/sbin/dhcpcd</string>
+        <string>-B</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>

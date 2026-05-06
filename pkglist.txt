@@ -54,3 +54,19 @@ wifi-firmware-rtw89-kmod
 # (virtio, hv_*, xenpci built-in) — no extra kmods needed.
 virtualbox-ose-additions-nox11
 open-vm-tools-nox11
+
+# Network auto-config: dhcpcd in master mode replaces dhclient + rtsold
+# for IPv4 DHCP, IPv6 DHCPv6, RA/SLAAC processing, and link-state
+# handling. Recognizes FreeBSD's bridge/lagg/vlan layering and only
+# runs DHCP at the appropriate level. Started directly by launchd
+# (org.freebsd.dhcpcd.plist) rather than via netconfigd; netconfigd
+# is paused until Phase 2 brings it back for higher-level features
+# (PF_ROUTE source, scutil IPC, Network.plist watcher).
+dhcpcd
+
+# Ports wpa_supplicant supersedes the base version: faster WPA3-SAE/OWE
+# uptake, current EAP method support, more aggressive CVE backports.
+# dhcpcd auto-coordinates with wpa_supplicant via its wpa_supplicant
+# hook for wifi-iface DHCP after association. SSID config is still
+# user-driven via /etc/wpa_supplicant.conf or wpa_cli.
+wpa_supplicant
