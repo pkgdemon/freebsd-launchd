@@ -264,6 +264,18 @@ CHROOT_BUILD
 
         rm -rf "$WORK/rootfs/tmp/configd"
 
+        # ---- kmodloader build (Phase 1) ----
+        # kmodloader's own Makefile handles compile + install in one
+        # `gmake install` call. No wrapper script.
+        echo "==> staging kmodloader/ -> chroot:/tmp/kmodloader/"
+        mkdir -p "$WORK/rootfs/tmp/kmodloader"
+        rsync -a --delete "$ROOT/kmodloader/" "$WORK/rootfs/tmp/kmodloader/"
+
+        echo "==> building + installing kmodloader in chroot"
+        chroot "$WORK/rootfs" /usr/local/bin/gmake -C /tmp/kmodloader install
+
+        rm -rf "$WORK/rootfs/tmp/kmodloader"
+
         # ---- ldconfig hint for /System/Library/Libraries ----
         # FreeBSD's /etc/rc.d/ldconfig at boot reads $ldconfig_local_dirs
         # (default /usr/local/libdata/ldconfig) and adds each listed

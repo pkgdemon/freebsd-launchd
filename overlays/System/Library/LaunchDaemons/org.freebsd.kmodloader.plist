@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  org.freebsd.kmodloader.plist
+
+  Phase 1 kmodloader: one-shot at boot. Walks sysctl dev. tree,
+  matches each attached device against personality plists in
+  /System/Library/Extensions/*.kext/Contents/Info.plist, kldloads
+  any matching kmod that isn't already loaded.
+
+  RunAtLoad=true: fires once at boot. KeepAlive=false: exit when work
+  is done; don't respawn. Phase 2 will swap to a long-running shape
+  with a DISPATCH_SOURCE_TYPE_READ source on /dev/devctl for hot-plug
+  events.
+
+  Alphabetical scan order means kmodloader runs after cron / dmesg.boot
+  / getty / one of getty.vty0 — all of which don't depend on hardware
+  kmods kmodloader might bring in. Importantly, it runs before
+  netconfigd alphabetically: any NIC kmod kmodloader loads is in place
+  before netconfigd's getifaddrs() walk.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.freebsd.kmodloader</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/libexec/kmodloader</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

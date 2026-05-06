@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  if_em.kext — Intel 1Gb Ethernet (8254x / 82571 / 82572 / 82573 /
+  82574L family) PCI personality.
+
+  Driven by FreeBSD's em(4) driver; kld is if_em.ko. Most of these
+  IDs are already attached at boot in qemu / VirtualBox / typical
+  desktop hardware where em is in the GENERIC kernel — kmodloader
+  matches but kldload reports already-loaded. The personality stays
+  useful for systems that build a stripped kernel without the
+  built-in if_em or for hot-plug scenarios.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>org.freebsd.kext.if_em</string>
+    <key>CFBundleExecutable</key>
+    <string>if_em</string>
+    <key>OSBundleRequired</key>
+    <string>Network</string>
+
+    <key>IOKitPersonalities</key>
+    <dict>
+        <key>IntelGigabitEthernet</key>
+        <dict>
+            <key>IOMatchCategory</key>
+            <string>PCI</string>
+            <key>IOPCIMatch</key>
+            <array>
+                <!-- 82574L (qemu's default e1000 model) -->
+                <string>0x8086:0x10D3</string>
+                <!-- 82540EM / 82540EP (older qemu / VirtualBox e1000) -->
+                <string>0x8086:0x100E</string>
+                <string>0x8086:0x1015</string>
+                <string>0x8086:0x1016</string>
+                <!-- 82571EB / 82572EI (server boards) -->
+                <string>0x8086:0x105E</string>
+                <string>0x8086:0x1075</string>
+                <string>0x8086:0x1076</string>
+                <string>0x8086:0x1077</string>
+                <string>0x8086:0x1078</string>
+                <string>0x8086:0x1079</string>
+                <string>0x8086:0x107A</string>
+                <string>0x8086:0x107B</string>
+                <!-- 82573 / 82573L -->
+                <string>0x8086:0x108B</string>
+                <string>0x8086:0x108C</string>
+                <string>0x8086:0x109A</string>
+                <!-- 82574 -->
+                <string>0x8086:0x10D3</string>
+                <!-- 82577 / 82578 / 82579 (lm/lc PHY variants) -->
+                <string>0x8086:0x10EA</string>
+                <string>0x8086:0x10EB</string>
+                <string>0x8086:0x1502</string>
+                <string>0x8086:0x1503</string>
+                <!-- ICH8 / ICH9 / ICH10 -->
+                <string>0x8086:0x10BD</string>
+                <string>0x8086:0x10C0</string>
+                <string>0x8086:0x10C2</string>
+                <string>0x8086:0x10C3</string>
+                <string>0x8086:0x10C4</string>
+                <string>0x8086:0x10C5</string>
+                <!-- I217 / I218 / I219 (PCH integrated; partial list) -->
+                <string>0x8086:0x153A</string>
+                <string>0x8086:0x153B</string>
+                <string>0x8086:0x155A</string>
+                <string>0x8086:0x1559</string>
+                <string>0x8086:0x15A0</string>
+                <string>0x8086:0x15A1</string>
+                <string>0x8086:0x15A2</string>
+                <string>0x8086:0x15A3</string>
+            </array>
+            <key>IOProbeScore</key>
+            <integer>200</integer>
+        </dict>
+    </dict>
+</dict>
+</plist>

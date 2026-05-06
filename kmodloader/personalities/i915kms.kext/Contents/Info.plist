@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  i915kms.kext — Intel integrated GPU (Linux KPI port via drm-kmod).
+
+  Driven by drm-latest-kmod's i915kms.ko. Phase 1 personality covering
+  the most common consumer + laptop chipsets; not exhaustive. Match
+  fires on attached Intel display controllers; kmodloader kldloads
+  i915kms which then takes over the framebuffer.
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>org.freebsd.kext.i915kms</string>
+    <key>CFBundleExecutable</key>
+    <string>i915kms</string>
+    <key>OSBundleRequired</key>
+    <string>Graphics</string>
+
+    <key>IOKitPersonalities</key>
+    <dict>
+        <key>IntelGraphics</key>
+        <dict>
+            <key>IOMatchCategory</key>
+            <string>PCI</string>
+            <key>IOPCIMatch</key>
+            <array>
+                <!-- HD 5500 / Broadwell GT2 -->
+                <string>0x8086:0x1616</string>
+                <string>0x8086:0x1626</string>
+                <!-- Skylake GT2 / GT3 -->
+                <string>0x8086:0x1916</string>
+                <string>0x8086:0x191B</string>
+                <string>0x8086:0x191D</string>
+                <string>0x8086:0x191E</string>
+                <string>0x8086:0x1926</string>
+                <string>0x8086:0x192B</string>
+                <string>0x8086:0x192D</string>
+                <!-- Kaby Lake -->
+                <string>0x8086:0x5916</string>
+                <string>0x8086:0x591B</string>
+                <string>0x8086:0x591D</string>
+                <string>0x8086:0x591E</string>
+                <string>0x8086:0x5926</string>
+                <string>0x8086:0x5927</string>
+                <!-- Coffee Lake -->
+                <string>0x8086:0x3E92</string>
+                <string>0x8086:0x3E9B</string>
+                <string>0x8086:0x3EA5</string>
+                <!-- Whiskey Lake / Comet Lake -->
+                <string>0x8086:0x3EA0</string>
+                <string>0x8086:0x9B41</string>
+                <string>0x8086:0x9BC4</string>
+                <string>0x8086:0x9BC5</string>
+                <string>0x8086:0x9BC8</string>
+                <!-- Ice Lake (Gen 11) -->
+                <string>0x8086:0x8A50</string>
+                <string>0x8086:0x8A51</string>
+                <string>0x8086:0x8A52</string>
+                <string>0x8086:0x8A53</string>
+                <!-- Tiger Lake (Gen 12) -->
+                <string>0x8086:0x9A40</string>
+                <string>0x8086:0x9A49</string>
+                <string>0x8086:0x9A78</string>
+                <!-- Alder Lake -->
+                <string>0x8086:0x4680</string>
+                <string>0x8086:0x4682</string>
+                <string>0x8086:0x4690</string>
+                <string>0x8086:0x46A0</string>
+                <string>0x8086:0x46A6</string>
+                <string>0x8086:0x46A8</string>
+            </array>
+            <key>IOProbeScore</key>
+            <integer>200</integer>
+        </dict>
+    </dict>
+</dict>
+</plist>
