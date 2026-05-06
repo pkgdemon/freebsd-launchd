@@ -131,6 +131,25 @@ if [ -n "$RUNTIME_PKGS" ] || [ -n "$BUILD_PKGS" ]; then
             IGNORE_OSVERSION=yes \
             LICENSES_ACCEPTED=NVIDIA \
             pkg install -y $RUNTIME_PKGS
+
+        # ---- dhcpcd: silence DHCPv6 retry spam ----
+        # The dhcpcd port ships /usr/local/etc/dhcpcd.conf as @sample;
+        # pkg copies it to dhcpcd.conf at install. Append nodhcp6 so
+        # dhcpcd doesn't attempt DHCPv6 on networks where the router
+        # advertises the M-flag (M=1, "use DHCPv6 for addresses") but
+        # the DHCPv6 server returns "No Addresses Available" — common
+        # on consumer routers with half-configured IPv6, generates
+        # endless retry-spam in /var/log/messages with no functional
+        # gain. SLAAC + RA processing stay enabled, so global IPv6
+        # still works on networks that advertise a prefix correctly.
+        # Verified empirically on a Lenovo laptop in May 2026.
+        if [ -f "$WORK/rootfs/usr/local/etc/dhcpcd.conf" ]; then
+            cat >> "$WORK/rootfs/usr/local/etc/dhcpcd.conf" <<'EOF'
+
+# Live ISO override: skip DHCPv6 stateful — see build.sh comment.
+nodhcp6
+EOF
+        fi
     else
         echo "==> pkglist.txt empty; skipping runtime pkg install"
     fi
