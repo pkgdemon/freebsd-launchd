@@ -48,26 +48,38 @@ wifi-firmware-rtw89-kmod
 
 # Hypervisor guest additions.
 #
-# virtualbox-ose-additions-nox11 ships REAL klds — vboxguest.ko (core
-# guest infrastructure) and vboxvfs.ko (shared folders filesystem) —
-# plus userspace VBoxService/VBoxControl/mount_vboxvfs. kmodloader
-# reads kern.vm_guest=="vbox" at boot and kldloads vboxguest +
-# vboxvfs. NO vboxvideo — that's a Linux thing; VBox guest video on
-# FreeBSD goes through xf86-video-vmware or scfb/vesa.
+# Shipped on the ISO so the binaries are present for users who want
+# to enable guest-additions features manually, AND so the future
+# Phase 2+ launchd plists (org.freebsd.vboxservice.plist,
+# org.freebsd.vmtoolsd.plist) can find them. Until those plists ship,
+# nothing auto-runs:
 #
-# open-vm-tools-nox11 ships ZERO klds. All userspace: vmtoolsd,
-# vmware-hgfsclient, mount_vmblock, etc. The kernel side (vmx
-# paravirt NIC) is in GENERIC; vmblock-fuse uses base fuse. We ship
-# the package for the userspace tools (shared folders + clipboard
-# integration via vmtoolsd), but kmodloader doesn't try to kldload
-# anything for vmware — there's nothing to load.
+#   virtualbox-ose-additions-nox11 ships:
+#     /boot/modules/vboxguest.ko    core guest infrastructure
+#     /boot/modules/vboxvfs.ko      shared folders filesystem
+#     /usr/local/sbin/VBoxService   userspace daemon (clipboard,
+#                                   time sync, screen resize, etc.)
+#     /usr/local/sbin/VBoxControl   CLI
+#
+#   open-vm-tools-nox11 ships:
+#     /usr/local/bin/vmtoolsd       userspace daemon (clipboard,
+#                                   shared folders via vmblock-fuse,
+#                                   time sync)
+#     /usr/local/bin/vmware-*       helper utilities
+#     /usr/local/sbin/mount_vmblock
+#     ZERO .ko files — vmware kernel side is in GENERIC (vmx driver),
+#     vmblock uses base fuse.
+#
+# kmodloader does NOT load these kmods. Apple's pattern (and ours)
+# is that service-related kmods are loaded by the service's launchd
+# plist, not by the hardware autodetect daemon. kmodloader handles
+# hardware drivers (PCI / USB / class match); guest additions are
+# services. When org.freebsd.vboxservice.plist exists in Phase 2+,
+# it will kldload vboxguest + vboxvfs before launching VBoxService —
+# matching FreeBSD's rc.d/vboxservice pattern.
 #
 # QEMU/KVM/bhyve/Hyper-V/Xen guests are covered by GENERIC kernel
-# (virtio_*, hv_*, xenpci built-in) — no extra kmods needed.
-#
-# Userspace daemons (VBoxService, vmtoolsd) need separate launchd
-# plists for full guest-additions UX (clipboard, time sync, screen
-# resize). Phase 2+ work; not shipped yet.
+# (virtio_*, hv_*, xenpci built-in) — no extra packages needed.
 virtualbox-ose-additions-nox11
 open-vm-tools-nox11
 

@@ -22,12 +22,12 @@
  *    only mode, doesn't gain new device IDs. amdgpu is the open
  *    default that picks up everything new.
  *
- * 3. Hypervisor scan — covers VirtualBox guest additions that ship
- *    as ports kmods. Reads kern.vm_guest and routes:
- *      vbox    → vboxguest, vboxvfs (shared folders fs)
- *      vmware  → no kmods (open-vm-tools is all userspace daemons;
- *                vmx paravirt NIC is in GENERIC)
- *      kvm/qemu/bhyve/hv/xen/none → no action (all covered by GENERIC).
+ * Hypervisor guest additions (vboxguest, vboxvfs, vmtoolsd-related
+ * kmods) are NOT kmodloader's responsibility — they're services,
+ * not hardware drivers. The matching launchd plists (planned
+ * Phase 2+: org.freebsd.vboxservice.plist, org.freebsd.vmtoolsd.plist)
+ * handle their own kldload before launching the userspace daemon,
+ * matching FreeBSD's rc.d/vboxservice pattern.
  *
  * Loaded klds are deduped and the GPU drivers run first so the
  * framebuffer / drmn0 is up before peripheral drivers attach.
@@ -45,8 +45,6 @@
 - (NSArray<NSString *> *)kldsFromDevmatch;
 - (NSArray<NSDictionary *> *)gpuDevices;
 - (NSArray<NSString *> *)gpuKldsForDevices:(NSArray<NSDictionary *> *)devices;
-- (NSArray<NSString *> *)hypervisorKlds;
-- (NSString *)sysctlString:(NSString *)name;
 - (NSSet<NSString *> *)loadedKlds;
 - (BOOL)kldload:(NSString *)kld;
 @end
@@ -62,21 +60,15 @@
     NSLog(@"kmodloader: %lu GPU device(s) → %lu kld(s)",
           (unsigned long)gpuDevices.count, (unsigned long)gpuKlds.count);
 
-    NSArray<NSString *> *vmKlds = [self hypervisorKlds];
-    NSLog(@"kmodloader: hypervisor → %lu kld(s)",
-          (unsigned long)vmKlds.count);
-
     NSArray<NSString *> *devmatchKlds = [self kldsFromDevmatch];
     NSLog(@"kmodloader: devmatch suggests %lu kld(s)",
           (unsigned long)devmatchKlds.count);
 
-    /* GPU first — once the framebuffer is owned by a DRM driver, peripheral
-     * driver loads can't visibly disrupt it. Then VM klds (provide
-     * resolution change / clipboard / etc. on top of DRM). Then the
+    /* GPU first — once the framebuffer is owned by a DRM driver,
+     * peripheral driver loads can't visibly disrupt it. Then the
      * devmatch set fills in the rest. */
     NSMutableOrderedSet<NSString *> *plan = [NSMutableOrderedSet orderedSet];
     [plan addObjectsFromArray:gpuKlds];
-    [plan addObjectsFromArray:vmKlds];
     [plan addObjectsFromArray:devmatchKlds];
 
     NSSet<NSString *> *loaded = [self loadedKlds];
@@ -233,56 +225,6 @@
         }
     }
     return r.array;
-}
-
-/* Read kern.vm_guest and return any VM-specific klds we should load.
- * GENERIC already covers virtio (kvm/qemu/bhyve), Hyper-V, vmxnet3
- * (vmx driver), and Xen guest paths in-kernel.
- *
- * VirtualBox guest additions (emulators/virtualbox-ose-additions-nox11)
- * ship two real klds we want loaded:
- *   vboxguest.ko  – core guest-additions infrastructure
- *   vboxvfs.ko    – shared folders filesystem
- * NOT vboxvideo — that's a Linux thing; on FreeBSD VBox guest video
- * uses the VMware-emulated SVGA path (xf86-video-vmware) or scfb/vesa.
- *
- * VMware guest additions (emulators/open-vm-tools-nox11) ship ZERO
- * klds — everything is userspace daemons (vmtoolsd, vmware-hgfsclient,
- * mount_vmblock). Those need their own launchd plists, not kmodloader.
- * The kernel side (vmx for paravirt NIC, vmblock_fuse via fuse) is
- * either in GENERIC or fuse-loaded on demand.
- *
- * If the package isn't installed, kldload fails harmlessly. */
-- (NSArray<NSString *> *)hypervisorKlds
-{
-    NSString *vmGuest = [self sysctlString:@"kern.vm_guest"];
-    if ([vmGuest isEqualToString:@"vbox"]) {
-        return @[@"vboxguest", @"vboxvfs"];
-    }
-    /* vmware, none, kvm, qemu, bhyve, hv, xen: no kmods needed. */
-    return @[];
-}
-
-- (NSString *)sysctlString:(NSString *)name
-{
-    NSTask *task = [[NSTask alloc] init];
-    task.launchPath = @"/sbin/sysctl";
-    task.arguments = @[@"-n", name];
-    NSPipe *pipe = [NSPipe pipe];
-    task.standardOutput = pipe;
-    task.standardError = [NSPipe pipe];
-    @try {
-        [task launch];
-        [task waitUntilExit];
-    } @catch (NSException *exc) {
-        return @"";
-    }
-    if (task.terminationStatus != 0) return @"";
-    NSData *data = [pipe.fileHandleForReading readDataToEndOfFile];
-    NSString *raw = [[NSString alloc] initWithData:data
-                                          encoding:NSUTF8StringEncoding];
-    return [raw stringByTrimmingCharactersInSet:
-            NSCharacterSet.whitespaceAndNewlineCharacterSet];
 }
 
 /* Parse kldstat -v for the set of currently-loaded kld basenames. */
