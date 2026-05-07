@@ -146,8 +146,20 @@ if [ -n "$RUNTIME_PKGS" ] || [ -n "$BUILD_PKGS" ]; then
         if [ -f "$WORK/rootfs/usr/local/etc/dhcpcd.conf" ]; then
             cat >> "$WORK/rootfs/usr/local/etc/dhcpcd.conf" <<'EOF'
 
-# Live ISO override: skip DHCPv6 stateful — see build.sh comment.
+# Live ISO overrides (see build.sh comment).
+# nodhcp6: don't try DHCPv6 stateful — common consumer routers
+#   advertise the M-flag but have a broken DHCPv6 server returning
+#   "No Addresses Available" on every Solicit, generating endless
+#   retry spam in /var/log/messages. SLAAC + RA processing remain
+#   enabled, so global IPv6 still works on networks that advertise a
+#   prefix in the RA.
+# quiet: drop notice-level logging to reduce "part of a Router
+#   Advertisement expired" spam on networks where RA components
+#   have short lifetimes (also common consumer-router behavior).
+#   We keep warning/error level; just suppress the routine
+#   informational notices that look alarming but aren't.
 nodhcp6
+quiet
 EOF
         fi
     else
@@ -503,9 +515,35 @@ done
 
 cp "$ROOT/boot/loader.conf" "$WORK/cdroot/boot/loader.conf"
 
+# /boot/firmware on the cd9660 → symlink to /sysroot/boot/firmware
+# (where the unionfs mounts the rootfs.uzip layer at boot, with all
+# pkg-installed firmware files inside).
+#
+# Why: kernel-context vn_open in subr_firmware.c's try_binary_file()
+# does namei against the kernel's root namespace, which is the cd9660
+# mount — NOT the chroot the userspace processes see. So files visible
+# at /boot/firmware/ in chroot view are invisible to kernel firmware
+# loading. Result: iwlwifi/i915kms attach but firmware-load fails with
+# "File size way too small!" → no wlan0, no DRM acceleration.
+#
+# The symlink turns kernel-namei's lookup of /boot/firmware/foo.ucode
+# into a follow-through-mount-point chain:
+#   1. cd9660:/boot/firmware → symlink → /sysroot/boot/firmware
+#   2. cd9660:/sysroot is the unionfs mount point
+#   3. namei traverses into the unionfs view
+#   4. Finds the file in the rootfs.uzip layer
+# Costs ~0 bytes on the cd9660 (just a symlink). Avoids copying ~1GB
+# of firmware blobs into the cdroot.
+#
+# Rock Ridge extension on cd9660 (already enabled via mkisoimages.sh)
+# preserves symlinks correctly. The symlink target uses the standard
+# init.sh mount point /sysroot.
+ln -sf /sysroot/boot/firmware "$WORK/cdroot/boot/firmware"
+
 echo "==> /boot on cd9660:"
 du -sh "$WORK/cdroot/boot" "$WORK/cdroot/boot/kernel" || true
 ls -la "$WORK/cdroot/boot/kernel/" || true
+ls -la "$WORK/cdroot/boot/firmware" || true
 
 #
 # 9. extract src.txz to expose FreeBSD's release scripts.
