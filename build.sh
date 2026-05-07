@@ -132,33 +132,44 @@ if [ -n "$RUNTIME_PKGS" ] || [ -n "$BUILD_PKGS" ]; then
             LICENSES_ACCEPTED=NVIDIA \
             pkg install -y $RUNTIME_PKGS
 
-        # ---- dhcpcd: silence DHCPv6 retry spam ----
+        # ---- dhcpcd: silence v6 spam on consumer-router-broken-IPv6 ----
         # The dhcpcd port ships /usr/local/etc/dhcpcd.conf as @sample;
-        # pkg copies it to dhcpcd.conf at install. Append nodhcp6 so
-        # dhcpcd doesn't attempt DHCPv6 on networks where the router
-        # advertises the M-flag (M=1, "use DHCPv6 for addresses") but
-        # the DHCPv6 server returns "No Addresses Available" — common
-        # on consumer routers with half-configured IPv6, generates
-        # endless retry-spam in /var/log/messages with no functional
-        # gain. SLAAC + RA processing stay enabled, so global IPv6
-        # still works on networks that advertise a prefix correctly.
-        # Verified empirically on a Lenovo laptop in May 2026.
-        if [ -f "$WORK/rootfs/usr/local/etc/dhcpcd.conf" ]; then
-            cat >> "$WORK/rootfs/usr/local/etc/dhcpcd.conf" <<'EOF'
+        # pkg copies it to dhcpcd.conf at install via the @sample
+        # mechanism. We defensively `cp` if .conf is missing (in case
+        # pkg's auto-copy didn't fire in the chroot context), then
+        # append our overrides.
+        DHCPCD_CONF="$WORK/rootfs/usr/local/etc/dhcpcd.conf"
+        DHCPCD_SAMPLE="$DHCPCD_CONF.sample"
+        if [ ! -f "$DHCPCD_CONF" ] && [ -f "$DHCPCD_SAMPLE" ]; then
+            cp "$DHCPCD_SAMPLE" "$DHCPCD_CONF"
+        fi
+        if [ -f "$DHCPCD_CONF" ]; then
+            cat >> "$DHCPCD_CONF" <<'EOF'
 
 # Live ISO overrides (see build.sh comment).
-# nodhcp6: don't try DHCPv6 stateful — common consumer routers
-#   advertise the M-flag but have a broken DHCPv6 server returning
+#
+# nodhcp6: skip DHCPv6 stateful entirely. Common consumer routers
+#   advertise the M-flag but have a broken DHCPv6 server that returns
 #   "No Addresses Available" on every Solicit, generating endless
-#   retry spam in /var/log/messages. SLAAC + RA processing remain
-#   enabled, so global IPv6 still works on networks that advertise a
-#   prefix in the RA.
-# quiet: drop notice-level logging to reduce "part of a Router
-#   Advertisement expired" spam on networks where RA components
-#   have short lifetimes (also common consumer-router behavior).
-#   We keep warning/error level; just suppress the routine
-#   informational notices that look alarming but aren't.
+#   retry spam.
+#
+# noipv6rs: skip IPv6 router solicitation processing entirely. The
+#   "part of a Router Advertisement expired" notices come from
+#   dhcpcd's RA timer code at LOG_WARNING level, which the `quiet`
+#   directive does NOT suppress (quiet only filters info+notice).
+#   Without `noipv6rs` those messages keep arriving on console
+#   regardless of `quiet`. Side effect: SLAAC stops working too, so
+#   networks with properly-configured IPv6 lose global v6. The kernel
+#   still assigns IPv6 link-local independently. Trade: cleaner logs
+#   on broken-IPv6 networks (the common case) at the cost of SLAAC
+#   on properly-configured ones (uncommon for consumer hardware).
+#   To re-enable SLAAC: comment out `noipv6rs`.
+#
+# quiet: drop notice-level logging. Belt-and-suspenders alongside
+#   the noipv6rs+nodhcp6 above; suppresses anything dhcpcd might
+#   still chatter about during normal operation.
 nodhcp6
+noipv6rs
 quiet
 EOF
         fi
