@@ -26,17 +26,22 @@ libffi
 # `kldload amdgpu`, etc. by hand.
 drm-latest-kmod
 
-# AMD GPU firmware blobs (amdgpu/renoir_vcn.bin, navi*_*.bin, etc.).
+# GPU firmware blobs metaport — pulls all flavored gpu-firmware-*-kmod
+# subpackages (AMD per-chipset: renoir, navi*, vega*, polaris*, etc.;
+# Intel per-generation; Radeon legacy). The graphics/gpu-firmware-amd-
+# kmod port has no installable name itself — it produces ~80 per-chip
+# subpackages with no AMD-specific metaport — so gpu-firmware-kmod is
+# the only single-name way to get them all.
+#
 # NOT pulled transitively by drm-latest-kmod on current ports — the
-# old drm-kmod-firmware-* metaports were split into per-vendor
-# gpu-firmware-*-kmod ports and drm-latest-kmod no longer depends on
-# them. Without this, amdgpu kldload on Renoir panics in fini_hw
-# cleanup after vcn_v2_5 early_init fails -ENODEV (drm-kmod bug:
-# unregister_fictitious_range NULL-derefs on the unwind path when
-# firmware is missing, so "graceful degrade" isn't an option here —
+# old drm-kmod-firmware-* metaports got split out and drm-latest-kmod
+# no longer depends on them. Without this, amdgpu kldload on Renoir
+# panics in fini_hw cleanup after vcn_v2_5 early_init fails -ENODEV
+# (drm-kmod bug: unregister_fictitious_range NULL-derefs on the unwind
+# path when firmware is missing — "graceful degrade" isn't an option,
 # firmware presence is hard-required for amdgpu to even fail safely).
 # Verified on Lenovo Renoir laptop: missing firmware → instant panic.
-gpu-firmware-amd-kmod
+gpu-firmware-kmod
 
 # NVIDIA DRM driver: nvidia.ko + nvidia-modeset.ko + nvidia-drm.ko.
 # kmodloader loads this when it detects vendor=0x10de in pciconf -l;
