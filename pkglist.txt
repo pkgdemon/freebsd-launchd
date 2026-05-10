@@ -23,9 +23,20 @@ libffi
 # GPU kernel modules. Loaded by kmodloader at boot when matching
 # hardware is present (Phase 1+ of the freebsd-kmodloader plan); for
 # now just shipped on the ISO so users can `kldload i915kms`,
-# `kldload amdgpu`, etc. by hand. Pulls drm-kmod-firmware-* for the
-# blobs many modern GPUs need.
+# `kldload amdgpu`, etc. by hand.
 drm-latest-kmod
+
+# AMD GPU firmware blobs (amdgpu/renoir_vcn.bin, navi*_*.bin, etc.).
+# NOT pulled transitively by drm-latest-kmod on current ports — the
+# old drm-kmod-firmware-* metaports were split into per-vendor
+# gpu-firmware-*-kmod ports and drm-latest-kmod no longer depends on
+# them. Without this, amdgpu kldload on Renoir panics in fini_hw
+# cleanup after vcn_v2_5 early_init fails -ENODEV (drm-kmod bug:
+# unregister_fictitious_range NULL-derefs on the unwind path when
+# firmware is missing, so "graceful degrade" isn't an option here —
+# firmware presence is hard-required for amdgpu to even fail safely).
+# Verified on Lenovo Renoir laptop: missing firmware → instant panic.
+gpu-firmware-amd-kmod
 
 # NVIDIA DRM driver: nvidia.ko + nvidia-modeset.ko + nvidia-drm.ko.
 # kmodloader loads this when it detects vendor=0x10de in pciconf -l;
